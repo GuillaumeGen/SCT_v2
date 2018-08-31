@@ -1,0 +1,14 @@
+# Emacs files
+*~
+
+# ML files
+*.mli
+*.cmo
+*.cmi
+*.native
+
+# OCamlbuild files
+_build/*
+
+# Dedukti files
+*.dko
