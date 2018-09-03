@@ -6,7 +6,8 @@ open Callgraph
 open Sizechange
 open Positivity
 
-
+let imported_modules=ref []
+       
 type global_result=Terminating | G_SelfLooping
                   | G_UsingBrackets | G_NonPositive 
                   | G_NotHandledRewritingTypeLevel
@@ -44,9 +45,20 @@ let initialize : unit -> unit =
   Hashtbl.clear must_be_str_after;
   Hashtbl.clear after;
   Hashtbl.clear table_result;
-  list_SelfLooping := []
+  list_SelfLooping := [];
+  imported_modules := []
   
-
+let rec loading_modules : Term.term -> unit =
+  function
+  | Term.Kind 
+  | Term.Type _
+  | Term.DB (_, _, _) -> ()
+  | Term.Const (lc, n) -> import lc (md n)
+  | Term.App (t, u, l) -> List.iter loading_modules (t::u::l)
+  | Term.Lam (_, _, Some ty, te) -> loading_modules ty; loading_modules te
+  | Term.Lam (_, _, None, te) -> loading_modules te
+  | Term.Pi (_, _, t1, t2) -> loading_modules t1; loading_modules t2
+                        
 (** Creation of a new symbol.  *)
 let create_symbol : name -> int -> symb_status -> term -> unit =
   fun identifier arity status typ->
@@ -175,6 +187,9 @@ let pp_list_of_self_looping_rules : (name *index list) printer =
 
 let import : loc -> mident -> unit =
   fun lc m ->
+  if m = Env.get_name () || List.mem m !imported_modules
+  then ()
+  else
     let (deps,ctx,ext) = Signature.read_dko lc (string_of_mident m) in
     let symb (id,stat,ty,_) =
       let cst = mk_name m id in
