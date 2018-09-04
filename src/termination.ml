@@ -48,16 +48,6 @@ let initialize : unit -> unit =
   list_SelfLooping := [];
   imported_modules := []
   
-let rec loading_modules : Term.term -> unit =
-  function
-  | Term.Kind 
-  | Term.Type _
-  | Term.DB (_, _, _) -> ()
-  | Term.Const (lc, n) -> import lc (md n)
-  | Term.App (t, u, l) -> List.iter loading_modules (t::u::l)
-  | Term.Lam (_, _, Some ty, te) -> loading_modules ty; loading_modules te
-  | Term.Lam (_, _, None, te) -> loading_modules te
-  | Term.Pi (_, _, t1, t2) -> loading_modules t1; loading_modules t2
                         
 (** Creation of a new symbol.  *)
 let create_symbol : name -> int -> symb_status -> term -> unit =
@@ -84,15 +74,6 @@ let create_rule : rule_infos -> unit =
     incr g.next_rule_index
 
 
-(** Take all the rules headed by a symbol and add them to the call graph *)
-let add_rules : rule_infos list -> unit =
-  fun l ->
-    List.iter create_rule l;
-     Debug.(debug d_sizechange "Ajout des règles : @. - %a"
-        (pp_list "\n - " pp_rule_infos) l);
-    let ll=List.flatten (List.map (rule_to_call 0) l) in
-    if ll=[] then Debug.(debug d_sizechange "Liste de call vide générée");
-    List.iter add_call ll
 
 
 let corresp_loc_glob = function
@@ -124,9 +105,21 @@ let analyse_result : unit -> unit =
           k s.result
       ) tbl
 
-let add_constant : name -> staticity -> term -> unit
+(** Take all the rules headed by a symbol and add them to the call graph *)
+let rec add_rules : rule_infos list -> unit =
+  fun l ->
+    List.iter load_rules l;
+    List.iter create_rule l;
+     Debug.(debug d_sizechange "Ajout des règles : @. - %a"
+        (pp_list "\n - " pp_rule_infos) l);
+    let ll=List.flatten (List.map (rule_to_call 0) l) in
+    if ll=[] then Debug.(debug d_sizechange "Liste de call vide générée");
+    List.iter add_call ll
+      
+and add_constant : name -> staticity -> term -> unit
   = fun fct stat typ ->
     try
+      load_terms typ;
       let rm = right_most typ in
       let status =
         (
@@ -145,7 +138,49 @@ let add_constant : name -> staticity -> term -> unit
         create_symbol fct 0 Def_function typ;
         update_result fct CocOption
       end
+      
+and import : loc -> mident -> unit =
+  fun lc m ->
+  if m = Env.get_name () || List.mem m !imported_modules
+  then ()
+  else
+    begin
+      imported_modules:= m:: !imported_modules;
+      let (deps,ctx,ext) = Signature.read_dko lc (string_of_mident m) in
+      let symb (id,stat,ty,_) =
+        let cst = mk_name m id in
+        add_constant cst stat ty;
+      in
+      let rul (id,stat,ty,rul) =
+        add_rules rul
+      in
+      List.iter symb ctx;
+      List.iter rul ctx
+    end
     
+and load_terms : Term.term -> unit =
+  function
+  | Term.Kind 
+  | Term.Type _
+  | Term.DB (_, _, _) -> ()
+  | Term.Const (lc, n) -> import lc (md n)
+  | Term.App (t, u, l) -> List.iter load_terms (t::u::l)
+  | Term.Lam (_, _, Some ty, te) -> load_terms ty; load_terms te
+  | Term.Lam (_, _, None, te) -> load_terms te
+  | Term.Pi (_, _, t1, t2) -> load_terms t1; load_terms t2
+
+and load_patterns = function
+  | Rule.Var (_,_,_,l) -> List.iter load_patterns l
+  | Rule.Pattern (lc, n, l) -> import lc (md n); List.iter load_patterns l
+  | Rule.Lambda (_, _, p) -> load_patterns p
+  | Rule.Brackets t -> load_terms t
+
+and load_rules r =
+  let lc = r.l in
+  import lc (md r.cst);
+  load_terms r.rhs;
+  List.iter load_patterns r.args
+
 (** Do the SCT-checking *)	
 let termination_check () =
   NMap.iter
@@ -185,18 +220,3 @@ let pp_list_of_self_looping_rules : (name *index list) printer =
          )
       ) y
 
-let import : loc -> mident -> unit =
-  fun lc m ->
-  if m = Env.get_name () || List.mem m !imported_modules
-  then ()
-  else
-    let (deps,ctx,ext) = Signature.read_dko lc (string_of_mident m) in
-    let symb (id,stat,ty,_) =
-      let cst = mk_name m id in
-      add_constant cst stat ty;
-    in
-    let rul (id,stat,ty,rul) =
-      add_rules rul
-    in
-    List.iter symb ctx;
-    List.iter rul ctx

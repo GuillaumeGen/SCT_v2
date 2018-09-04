@@ -91,8 +91,8 @@ let run_on_file file =
   Rule.allow_non_linear := true;
   Parser.handle_channel md (mk_entry md) input;
   if Termination.termination_check ()
-  then Format.printf "YES"
-  else Format.printf "MAYBE";
+  then Format.printf "YES@."
+  else Format.printf "MAYBE@.";
   close_in input
 
 let _ =
