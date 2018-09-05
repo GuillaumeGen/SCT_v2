@@ -154,4 +154,5 @@ let term2rule : rule_infos -> term -> rule_infos = fun r t ->
    rhs=t;
    esize=r.esize;
    pats=r.pats;
+   arity=[||];
    constraints=[]}

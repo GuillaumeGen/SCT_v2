@@ -182,7 +182,7 @@ let update_status : name -> symb_status -> unit = fun i res ->
 let add_call : call-> unit =
   fun cc ->
     let gr= !graph in
-    Debug.(debug d_sizechange "%a" pp_call cc);
+    Format.(printf "%a" pp_call cc);
     gr.calls := cc :: !(gr.calls)
 
 
@@ -247,7 +247,7 @@ and rule_to_call : int -> rule_infos -> call list = fun nb r ->
   let lp = r.args in
   List.iter (study_pm r.cst) lp;
   let callee = get_callee nb r in
-   Debug.(debug d_sizechange "We are studying %a@.The caller is %a@.The callee is %a"
+   Format.(printf "We are studying %a@.The caller is %a@.The callee is %a"
       pp_rule_infos r
       (pp_pair (pp_list "," pp_pattern) pp_name) (lp, r.cst)
       (pp_option "None" (pp_pair (pp_list "," pp_term) pp_name))

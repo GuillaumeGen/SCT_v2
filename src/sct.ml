@@ -5,10 +5,6 @@ open Entry
 
 exception Unpack_Failed
 
-let unpack_err : ('a,'b) error -> 'a = function
-  | OK a  -> a
-  | Err _ -> raise Unpack_Failed
-
 let compose f g = fun x -> f (g x)
                    
 let eprint lc fmt =
@@ -19,11 +15,7 @@ let mk_entry md e =
   | Decl(lc,id,st,ty) ->
     begin
       eprint lc "Declaration of constant '%a'." pp_ident id;
-      begin
-        match Env.declare lc id st ty with
-        | OK () -> ()
-        | Err e -> Errors.fail_env_error e
-      end;
+      Env.declare lc id st ty;
       let cst = mk_name md id in
       Termination.add_constant cst st ty
     end
@@ -31,27 +23,22 @@ let mk_entry md e =
     begin
       let opaque_str = if opaque then " (opaque)" else "" in
       eprint lc "Definition of symbol '%a'%s." pp_ident id opaque_str;
-      begin
-        let define = if opaque then Env.define_op else Env.define in
-        match define lc id te ty with
-        | OK () -> ()
-        | Err e -> Errors.fail_env_error e
-      end;
+      Env.define lc id opaque te ty;
       let cst = mk_name md id in
       begin
         match ty with
         | Some tt -> Termination.add_constant cst Definable tt
         | None    ->
-           Termination.add_constant cst Definable (unpack_err (Env.infer te))
+           Termination.add_constant cst Definable (Env.infer te)
       end;
       let rul : Rule.untyped_rule = { name= Delta(cst) ;
                    ctx = [] ;
                    pat = Pattern(lc, cst, []);
                    rhs = te ;
                  }
-      in Termination.add_rules [unpack_err (Rule.to_rule_infos rul)]
+      in Termination.add_rules [Rule.to_rule_infos rul]
     end
-  | Rules(rs) ->
+  | Rules(lc,rs) ->
     begin
       let open Rule in
       let get_infos p =
@@ -62,12 +49,9 @@ let mk_entry md e =
       let r = List.hd rs in (* cannot fail. *)
       let (l,cst) = get_infos r.pat in
       eprint l "Adding rewrite rules for '%a'" pp_name cst;
-      begin
-        match Env.add_rules rs with
-        | OK rs -> List.iter (eprint (get_loc_pat r.pat) "%a" pp_typed_rule) rs
-        | Err e -> Errors.fail_env_error e
-      end;
-      Termination.add_rules (List.map (compose unpack_err to_rule_infos) rs)
+      List.iter (fun (_,x) -> eprint (get_loc_pat r.pat) "%a" pp_typed_rule x)
+          (Env.add_rules rs); 
+      Termination.add_rules (List.map to_rule_infos rs)
     end
   | Eval(_,_,_)
   | Infer(_,_,_)
@@ -76,11 +60,7 @@ let mk_entry md e =
   | Print(_, _)
   | Name(_, _) -> ()
   | Require(lc,md) ->
-      begin
-        match Env.import lc md with
-        | OK () -> ()
-        | Err e -> Errors.fail_signature_error e
-      end;
+      Env.import lc md;
       Termination.import lc md
 
 let run_on_file file =
@@ -88,7 +68,6 @@ let run_on_file file =
   Debug.(debug d_module "Processing file '%s'..." file);
   let md = Env.init file in
   Termination.initialize ();
-  Rule.allow_non_linear := true;
   Parser.handle_channel md (mk_entry md) input;
   if Termination.termination_check ()
   then Format.printf "YES@."
@@ -112,10 +91,7 @@ let _ =
       , " Disable colors in the output" )
     ; ( "-stdin"
       , Arg.String (fun n -> run_on_stdin := Some(n))
-      , "MOD Parses standard input using module name MOD" )
-    ; ( "-version"
-      , Arg.Unit (fun () -> Format.printf "Dedukti %s@." Version.version)
-      , " Print the version number" )]
+      , "MOD Parses standard input using module name MOD" )]
   in
   let usage = "Usage: " ^ Sys.argv.(0) ^ " [OPTION]... [FILE]...\n" in
   let usage = usage ^ "Available options:" in
@@ -133,6 +109,6 @@ let _ =
       Parser.handle_channel md (mk_entry md) stdin;
       Errors.success "Standard input was successfully checked.\n"
   with
-  | Parse_error(loc,msg) -> Format.eprintf "Parse error at (%a): %s@." pp_loc loc msg; exit 1
+  | Env.EnvError (l,e) -> Errors.fail_env_error l e
   | Sys_error err        -> Format.eprintf "ERROR %s.@." err; exit 1
   | Exit                 -> exit 3

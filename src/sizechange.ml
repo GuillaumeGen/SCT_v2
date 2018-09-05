@@ -37,7 +37,7 @@ let sct_only : unit -> unit =
           (* test idempotent edges as soon as they are discovered *)
           if i = j && prod m m = m && not (decreasing m) then
             begin
-	    Debug.(debug d_sizechange "edge %a idempotent and looping\n%!" print_call
+	    Format.(printf "edge %a idempotent and looping\n%!" print_call
                   {callee = f; caller = g; matrix = m; rules = r});
               update_result f (SelfLooping r)
 	    end;
@@ -48,13 +48,13 @@ let sct_only : unit -> unit =
         end
     in
     (* adding initial edges *)
-    Debug.(debug d_sizechange "initial edges to be added:");
+    Format.(printf "initial edges to be added:");
     List.iter
-      (fun c -> Debug.(debug d_sizechange "  %a" print_call c))
+      (fun c -> Format.(printf "  %a" print_call c))
       !(ftbl.calls);
     let new_edges = ref !(ftbl.calls) in
     (* compute the transitive closure of the call graph *)
-    Debug.(debug d_sizechange "start completion");
+    Format.(printf "start completion");
     let rec fn () =
       match !new_edges with
       | [] -> ()
@@ -64,7 +64,7 @@ let sct_only : unit -> unit =
         if add_edge f g m r
         then
           begin
-            Debug.(debug d_sizechange "  edge %a added" print_call c);
+            Format.(printf "  edge %a added" print_call c);
             incr added;
             let t' = tbl.(j) in
             Array.iteri
@@ -73,7 +73,7 @@ let sct_only : unit -> unit =
                    (fun (m',r') ->
                       let c' = {callee = g; caller = id_to_name.(k); matrix = m'; rules=r'}
                       in
-                      Debug.(debug d_sizechange "  compose: %a * %a = "
+                      Format.(printf "  compose: %a * %a = "
                           print_call c
                           print_call c');
                       let m'' = prod m m' in
@@ -83,16 +83,16 @@ let sct_only : unit -> unit =
                         {callee = f; caller = id_to_name.(k); matrix = m''; rules = r''}
                       in
                       new_edges := c'' :: !new_edges;
-                       Debug.(debug d_sizechange "%a" print_call c'');
+                       Format.(printf "%a" print_call c'');
                    ) t
               ) t'
           end
         else
-          Debug.(debug d_sizechange "  edge %a is old" print_call c);
+         Format.(printf " edge %a is old" print_call c);
         fn ()
     in
     fn ();
-    Debug.(debug d_sizechange "SCT passed (%5d edges added, %6d composed)"
+    Format.(printf "SCT passed (%5d edges added, %6d composed)"
              !added !composed)
 
 
