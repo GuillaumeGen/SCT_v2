@@ -57,8 +57,8 @@ let create_symbol : name -> int -> symb_status -> term -> unit =
     then ()
     else
       let ind = !(g.next_index) in
-      Format.(printf "Adding the %a symbol %a of arity %i at index %a"
-        pp_status status pp_name identifier arity pp_index ind);
+      Debug.debug Sizematrix.D_matrix "Adding the %a symbol %a of arity %i at index %a"
+        pp_status status pp_name identifier arity pp_index ind;
       let sym = {ind ; arity ; typ; status; result=[]} in
       g.symbols := NMap.add identifier sym !(g.symbols);
       incr g.next_index
@@ -67,8 +67,8 @@ let create_symbol : name -> int -> symb_status -> term -> unit =
 let create_rule : rule_infos -> unit =
   fun r ->
     let g= !graph in
-    Format.(printf "Adding the rule %a"
-        pp_rule_infos r); 
+    Debug.debug Sizematrix.D_matrix "Adding the rule %a"
+        pp_rule_infos r; 
     let index = !(g.next_rule_index) in
     g.all_rules := IMap.add index r !(g.all_rules);
     incr g.next_rule_index
@@ -110,10 +110,10 @@ let rec add_rules : rule_infos list -> unit =
   fun l ->
     List.iter load_rules l;
     List.iter create_rule l;
-     Format.(printf "Ajout des règles : @. - %a"
-        (pp_list "\n - " pp_rule_infos) l);
+     Debug.debug Sizematrix.D_matrix  "Ajout des règles : @. - %a"
+        (pp_list "\n - " pp_rule_infos) l;
     let ll=List.flatten (List.map (rule_to_call 0) l) in
-    if ll=[] then Format.(printf "Liste de call vide générée");
+    if ll=[] then Debug.debug Sizematrix.D_matrix "Liste de call vide générée";
     List.iter add_call ll
       
 and add_constant : name -> Signature.staticity -> term -> unit
@@ -196,8 +196,8 @@ let termination_check () =
         !(!graph.symbols)
     );
   let tarj = tarjan after in
-   Format.(printf "After :@.%a" (pp_HT pp_name (pp_list "," pp_name)) after);
-   Format.(printf "%a" (pp_list ";" (pp_list "," pp_name)) tarj);
+   Debug.debug Positivity.D_positivity "After :@.%a" (pp_HT pp_name (pp_list "," pp_name)) after;
+   Debug.debug Positivity.D_positivity "%a" (pp_list ";" (pp_list "," pp_name)) tarj;
   sct_only ();
   (* Test positivity of the signature *)
   str_positive tarj must_be_str_after;

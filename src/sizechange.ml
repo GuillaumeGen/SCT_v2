@@ -9,17 +9,20 @@ open Rule
 open Sizematrix
 open Callgraph
 
+type Debug.flag += D_sctsummary
+let _ = Debug.register_flag D_sctsummary "Summary of SCT"
+
 (** the main function, checking if calls are well-founded *)
 let sct_only : unit -> unit =
   fun ()->
     let ftbl= !graph in
     let symbs = !(ftbl.symbols) in
     let num_fun = NMap.cardinal symbs in
+    let dname = mk_name (mk_mident "") (mk_ident "") in
     let id_to_name = Array.init num_fun (fun _ -> dname) in
     NMap.iter (fun k s -> id_to_name.(s.ind) <- k) symbs;
     (* tbl is a num_fun x num_fun Array in which each element is the list of all matrices between the two symbols with the rules which generated this matrix *)
     let tbl = Array.init num_fun (fun _ -> Array.make num_fun []) in
-    let print_call ff= pp_call ff in 
   (* counters to count added and composed edges *)
     let added = ref 0 and composed = ref 0 in
   (* function adding an edge, return a boolean indicating
@@ -37,8 +40,9 @@ let sct_only : unit -> unit =
           (* test idempotent edges as soon as they are discovered *)
           if i = j && prod m m = m && not (decreasing m) then
             begin
-	    Format.(printf "edge %a idempotent and looping\n%!" print_call
-                  {callee = f; caller = g; matrix = m; rules = r});
+	      Debug.debug Sizematrix.D_matrix
+                "edge %a idempotent and looping" pp_call
+                  {callee = f; caller = g; matrix = m; rules = r};
               update_result f (SelfLooping r)
 	    end;
 	  let ms = (m, r) ::
@@ -48,13 +52,13 @@ let sct_only : unit -> unit =
         end
     in
     (* adding initial edges *)
-    Format.(printf "initial edges to be added:");
+    Debug.debug Sizematrix.D_matrix "initial edges to be added:";
     List.iter
-      (fun c -> Format.(printf "  %a" print_call c))
+      (fun c -> (Debug.debug Sizematrix.D_matrix "  %a" pp_call c))
       !(ftbl.calls);
     let new_edges = ref !(ftbl.calls) in
     (* compute the transitive closure of the call graph *)
-    Format.(printf "start completion");
+    Debug.debug Sizematrix.D_matrix "start completion";
     let rec fn () =
       match !new_edges with
       | [] -> ()
@@ -64,7 +68,7 @@ let sct_only : unit -> unit =
         if add_edge f g m r
         then
           begin
-            Format.(printf "  edge %a added" print_call c);
+            Debug.debug Sizematrix.D_matrix "  edge %a added" pp_call c;
             incr added;
             let t' = tbl.(j) in
             Array.iteri
@@ -73,9 +77,9 @@ let sct_only : unit -> unit =
                    (fun (m',r') ->
                       let c' = {callee = g; caller = id_to_name.(k); matrix = m'; rules=r'}
                       in
-                      Format.(printf "  compose: %a * %a = "
-                          print_call c
-                          print_call c');
+                      Debug.debug Sizematrix.D_matrix "  compose: %a * %a = "
+                          pp_call c
+                          pp_call c';
                       let m'' = prod m m' in
                       let r'' = r @ r' in
                       incr composed;
@@ -83,16 +87,16 @@ let sct_only : unit -> unit =
                         {callee = f; caller = id_to_name.(k); matrix = m''; rules = r''}
                       in
                       new_edges := c'' :: !new_edges;
-                       Format.(printf "%a" print_call c'');
+                       Debug.debug Sizematrix.D_matrix "%a" pp_call c'';
                    ) t
               ) t'
           end
         else
-         Format.(printf " edge %a is old" print_call c);
+         Debug.debug Sizematrix.D_matrix " edge %a is old" pp_call c;
         fn ()
     in
     fn ();
-    Format.(printf "SCT passed (%5d edges added, %6d composed)"
-             !added !composed)
+    Debug.debug D_sctsummary "SCT passed (%5d edges added, %6d composed)"
+             !added !composed
 
 

@@ -3,8 +3,6 @@ open Basic
 open Parser
 open Entry
 
-exception Unpack_Failed
-
 let compose f g = fun x -> f (g x)
                    
 let eprint lc fmt =
@@ -65,26 +63,54 @@ let mk_entry md e =
 
 let run_on_file file =
   let input = open_in file in
-  Debug.(debug D_module "Processing file '%s'..." file);
+  Debug.debug Signature.D_module "Processing file '%s'..." file;
   let md = Env.init file in
   Termination.initialize ();
   Parser.handle_channel md (mk_entry md) input;
+  let colored n s =
+    if !Errors.color
+    then "\027[3" ^ string_of_int n ^ "m" ^ s ^ "\027[m"
+    else s
+  in
+  let green  = colored 2 in
+  let orange = colored 3 in
   if Termination.termination_check ()
-  then Format.printf "YES@."
-  else Format.printf "MAYBE@.";
+  then Format.eprintf "%s@." (green "YES")
+  else Format.eprintf "%s@." (orange "MAYBE");
   close_in input
+
+let set_debug : string -> unit =
+  fun st ->
+    String.iter
+    (fun c ->
+       try Env.set_debug_mode (String.make 1 c)
+       with
+       | Env.DebugFlagNotRecognized 'x' ->
+         Debug.enable_flag Sizematrix.D_matrix
+       | Env.DebugFlagNotRecognized 's' ->
+         Debug.enable_flag Sizechange.D_sctsummary
+       | Env.DebugFlagNotRecognized 'g' ->
+         Debug.enable_flag Callgraph.D_graph
+       | Env.DebugFlagNotRecognized 'a' ->
+         Debug.enable_flag Callgraph.D_call
+       | Env.DebugFlagNotRecognized 'p' ->
+         Debug.enable_flag Positivity.D_positivity
+    ) st
 
 let _ =
   let run_on_stdin = ref None  in
   let options = Arg.align
     [ ( "-d"
-      , Arg.String Debug.set_debug_mode
-      , "flags enables debugging for all given flags" )
+      , Arg.String set_debug
+      , "flags enables debugging for all given flags [xsgap] and [qnocutrm] inherited from Dedukti" )
+    ; ( "-dkv"
+      , Arg.Unit (fun () -> set_debug "montru")
+      , " Verbose mode (equivalent to -d 'montru')" )
     ; ( "-v"
-      , Arg.Unit (fun () -> Debug.set_debug_mode "montru")
-      , " Verbose mode (equivalent to -d 'w')" )
+      , Arg.Unit (fun () -> set_debug "xsgap")
+      , " Verbose mode (equivalent to -d 'wsgap')" )
     ; ( "-q"
-      , Arg.Unit (fun () -> Debug.set_debug_mode "q")
+      , Arg.Unit (fun () -> set_debug "q")
       , " Quiet mode (equivalent to -d 'q'" )
     ; ( "-nc"
       , Arg.Clear Errors.color
@@ -110,5 +136,5 @@ let _ =
       Errors.success "Standard input was successfully checked.\n"
   with
   | Env.EnvError (l,e) -> Errors.fail_env_error l e
-  | Sys_error err        -> Format.eprintf "ERROR %s.@." err; exit 1
-  | Exit                 -> exit 3
+  | Sys_error err      -> Errors.fail_sys_error err
+  | Exit               -> exit 3

@@ -4,6 +4,9 @@ open Basic
 open Term
 open Rule
 
+type Debug.flag += D_matrix
+let _ = Debug.register_flag D_matrix "Call matrix"
+
 (** Representation of the set {-1, 0, ∞} *)
 type cmp = Min1 | Zero | Infi
 

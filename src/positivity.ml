@@ -4,6 +4,9 @@ open Rule
 open Sizematrix
 open Callgraph
 
+type Debug.flag += D_positivity
+let _ = Debug.register_flag D_positivity "Positivity"
+    
 exception Coc
 
 (** A table linking each symbol with the list of symbols which must be strictly after *)
