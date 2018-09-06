@@ -8,7 +8,7 @@ exception Unpack_Failed
 let compose f g = fun x -> f (g x)
                    
 let eprint lc fmt =
-  Debug.(debug d_notice ("%a " ^^ fmt) pp_loc lc)
+  Debug.(debug D_notice ("%a " ^^ fmt) pp_loc lc)
 
 let mk_entry md e =
   match e with
@@ -65,7 +65,7 @@ let mk_entry md e =
 
 let run_on_file file =
   let input = open_in file in
-  Debug.(debug d_module "Processing file '%s'..." file);
+  Debug.(debug D_module "Processing file '%s'..." file);
   let md = Env.init file in
   Termination.initialize ();
   Parser.handle_channel md (mk_entry md) input;
