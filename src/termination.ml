@@ -116,7 +116,7 @@ let rec add_rules : rule_infos list -> unit =
     if ll=[] then Format.(printf "Liste de call vide générée");
     List.iter add_call ll
       
-and add_constant : name -> staticity -> term -> unit
+and add_constant : name -> Signature.staticity -> term -> unit
   = fun fct stat typ ->
     try
       load_terms typ;
@@ -124,9 +124,9 @@ and add_constant : name -> staticity -> term -> unit
       let status =
         (
           match rm,stat with
-          | Type _, Definable -> Def_type
-          | Type _, Static    -> Set_constructor
-          | _     , _         -> Def_function
+          | Type _, Signature.Definable -> Def_type
+          | Type _, Signature.Static    -> Set_constructor
+          | _     , _                   -> Def_function
         )
       in
       create_symbol fct (infer_arity_from_type typ) status typ;
