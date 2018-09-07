@@ -61,12 +61,26 @@ let mk_entry md e =
       Env.import lc md;
       Termination.import lc md
 
-let run_on_file file =
+let run_on_file file=
   let input = open_in file in
   Debug.debug Signature.D_module "Processing file '%s'..." file;
-  let md = Env.init file in
   Termination.initialize ();
-  Parser.handle_channel md (mk_entry md) input;
+  let last_point =
+    try String.rindex file '.'
+    with Not_found -> 0
+  in
+  let ext = Str.string_after file last_point in
+  if ext=".dk"
+  then
+    begin
+      let md = Env.init file in
+      Parser.handle_channel md (mk_entry md) input
+    end
+  else
+    begin
+      let md = mk_mident (Str.string_before file last_point) in
+      List.iter (mk_entry md) (Tpdb_to_dk.load md file)
+    end;
   let colored n s =
     if !Errors.color
     then "\027[3" ^ string_of_int n ^ "m" ^ s ^ "\027[m"

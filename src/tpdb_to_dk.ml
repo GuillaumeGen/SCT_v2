@@ -1,3 +1,5 @@
+open Basic
+
 module SString=Set.Make(struct
     type t=string
     let compare= compare
@@ -205,10 +207,17 @@ let print_dk y =
   let rules = get_rules x in
   List.iter (print_rules output) rules
 
-let _ =
-  let files =
-    let files = ref [] in
-    Arg.parse [] (fun f -> files := f :: !files) "";
-    List.rev !files
-  in
-  List.iter (fun x-> print_dk x) files
+let load : mident -> string -> entry list =
+  fun md file ->
+    let x=Xml.parse_file file in
+    let typ = get_types x in
+    let list_typ =
+      if SString.cardinal typ = 0
+      then [add_type "Default_Type"]
+      else List.map add_type (SString.elements typ)
+    in
+    let funcs = get_funcs x in
+    let list_func = List.map (add_func md) funcs in
+    let rules = get_rules x in
+    let list_rul = List.map (Scoping.scope_rule md) rules in
+    list_typ ^ list_func ^ list_rul

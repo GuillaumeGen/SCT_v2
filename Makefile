@@ -4,6 +4,7 @@ VERSION = devel
 # Compile with "make Q=" to display the commands that are run.
 Q = @
 
+PKG = -package dedukti -package xml-light
 
 .PHONY: all
 all: sct
@@ -14,7 +15,7 @@ sct: sct.native
 
 sct.native: $(wildcard src/*.ml src/*.mli)
 	@echo "[OPT] $@"
-	$(Q)ocamlbuild -quiet -package dedukti -use-ocamlfind src/sct.native
+	$(Q)ocamlbuild -quiet $(PKG) -use-ocamlfind src/sct.native
 
 clean:
 	$(Q)ocamlbuild -quiet -clean
