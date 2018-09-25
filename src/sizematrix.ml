@@ -1,8 +1,6 @@
 (** Tools used for the matrices labeling edges in the call-graph studied by sizechange.ml *)
 
 open Basic
-open Term
-open Rule
 
 type Debug.flag += D_matrix
 let _ = Debug.register_flag D_matrix "Call matrix"
@@ -99,63 +97,3 @@ let subsumes : matrix -> matrix -> bool = fun m1 m2 ->
       ) m1.tab;
     true
   with Exit -> false
-
-
-(** Compare a term and a pattern, using an int indicating under how many lambdas the comparison occurs *)
-let rec comparison :  int -> term -> pattern -> cmp =
-  fun nb t p ->
-    let rec comp_list : cmp -> pattern list -> term list -> cmp =
-      fun cur lp lt ->
-        match lp,lt with
-          | [], _ | _, [] -> cur
-          | a::l1, b::l2  ->
-            begin
-              match (comparison nb b a), cur with
-	      | _   , Infi -> assert false
-       (* We are sure, that the current state [cur] cannot contain a Infi, else the Infi would be the result of the function and no recursive call would be needed *)
-              | Infi, _    -> Infi
-              | Min1, _    -> comp_list Min1 l1 l2
-      	      | _   , Min1 -> comp_list Min1 l1 l2
-      	      | Zero, Zero -> comp_list Zero l1 l2
-      	    end
-    in
-    match p,t with
-    | Var (_,_,n,_), DB (_,_,m) -> if n+nb=m then Zero else Infi (* Two distinct variables are uncomparable *)
-    | Var (_,_,n,_), App(DB(_,_,m),_,_) -> if n+nb=m then Zero else Infi (* A variable when applied has the same size as if it was not applied *)
-    | Lambda(_,_,Var(_,_,n,_)), DB(_,_,m) -> if n+nb=m+1 then Zero else Infi
-    | Lambda(_,_,Var(_,_,n,_)), App(DB(_,_,m),_,_) -> if n+nb=m+1 then Zero else Infi
-    | Pattern (_,f,lp), App(Const(_,g),t1,lt) when (name_eq f g) ->
-       begin
-	 comp_list Zero lp (t1::lt)
-       end
-    | Pattern (_,_,l),t -> minus1 (mini (List.map (comparison nb t) l))
-    | Lambda(_,_,pp),Lam(_,_,_,tt) -> comparison nb tt pp
-    | _ -> Infi
-
-(** [matrix_of_lists m lp n lt n] compare each term of a list [lt] with a list of pattern [lp] considering that we are under [nb] lambdas and add some Infi to respect the arities of the caller and called functions *)
-let matrix_of_lists : int -> pattern list -> int -> term list -> int -> matrix =
-  fun m lp n lt nb ->
-    let mm= min m (List.length lp) in
-    let nn= min n (List.length lt) in
-    let tab =Array.make_matrix m n Infi in
-    for i=0 to mm-1 do
-      let p=List.nth lp i in
-      for j=0 to nn-1 do
-	let t=List.nth lt j in
-	tab.(i).(j) <- comparison nb t p
-      done;
-    done;
-    {h=m ; w=n ; tab}
-
-	
-(** Replace the right hand side of a rule with the term chosen *)
-let term2rule : rule_infos -> term -> rule_infos = fun r t ->
-  {l=r.l;
-   name=r.name;
-   cst=r.cst;
-   args=r.args;
-   rhs=t;
-   esize=r.esize;
-   pats=r.pats;
-   arity=[||];
-   constraints=[]}

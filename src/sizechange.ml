@@ -17,10 +17,10 @@ let sct_only : unit -> unit =
   fun ()->
     let ftbl= !graph in
     let symbs = !(ftbl.symbols) in
-    let num_fun = NMap.cardinal symbs in
-    let dname = mk_name (mk_mident "") (mk_ident "") in
+    let num_fun = IMap.cardinal symbs in
+    let dname = "" in
     let id_to_name = Array.init num_fun (fun _ -> dname) in
-    NMap.iter (fun k s -> id_to_name.(s.ind) <- k) symbs;
+    IMap.iter (fun k sy -> id_to_name.(k) <- sy.name) symbs;
     (* tbl is a num_fun x num_fun Array in which each element is the list of all matrices between the two symbols with the rules which generated this matrix *)
     let tbl = Array.init num_fun (fun _ -> Array.make num_fun []) in
   (* counters to count added and composed edges *)
@@ -28,8 +28,10 @@ let sct_only : unit -> unit =
   (* function adding an edge, return a boolean indicating
      if the edge is new or not *)
     let add_edge f g m r =
-      let i = (NMap.find f symbs).ind in
-      let j = (NMap.find g symbs).ind in
+      let i, _ =
+        IMap.find_first (fun k -> (IMap.find k symbs).name = f) symbs in
+      let j, _ =
+        IMap.find_first (fun k -> (IMap.find k symbs).name = g) symbs in
       let ti = tbl.(i) in
       let ms = ti.(j) in
       if List.exists (fun m' -> subsumes (fst m') m) ms
@@ -41,8 +43,8 @@ let sct_only : unit -> unit =
           if i = j && prod m m = m && not (decreasing m) then
             begin
 	      Debug.debug Sizematrix.D_matrix
-                "edge %a idempotent and looping" pp_call
-                  {callee = f; caller = g; matrix = m; rules = r};
+                "edge %a idempotent and looping" (pp_call !graph)
+                  {callee = i; caller = j; matrix = m};
               update_result f (SelfLooping r)
 	    end;
 	  let ms = (m, r) ::
