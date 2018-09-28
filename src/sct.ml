@@ -1,21 +1,18 @@
-open Term
 open Basic
-open Parser
 open Entry
+open Input
+open Callgraph
 
-let compose f g = fun x -> f (g x)
-                   
-let eprint lc fmt =
-  Debug.(debug D_notice ("%a " ^^ fmt) pp_loc lc)
-
-let mk_entry md e =
+let mk_dk_entry md e =
+  let eprint lc fmt =
+    Debug.(debug D_notice ("%a " ^^ fmt) pp_loc lc) in
   match e with
   | Decl(lc,id,st,ty) ->
     begin
       eprint lc "Declaration of constant '%a'." pp_ident id;
       Env.declare lc id st ty;
-      let cst = mk_name md id in
-      Termination.add_constant cst st ty
+      let cst = Dk.string_of_name (mk_name md id) in
+      DkRules.declare !graph cst ty;
     end
   | Def(lc,id,opaque,ty,te) ->
     begin
@@ -25,16 +22,11 @@ let mk_entry md e =
       let cst = mk_name md id in
       begin
         match ty with
-        | Some tt -> Termination.add_constant cst Definable tt
+        | Some tt -> DkRules.declare !graph (Dk.string_of_name cst) tt
         | None    ->
-           Termination.add_constant cst Definable (Env.infer te)
+          DkRules.declare !graph (Dk.string_of_name cst) (Env.infer te)
       end;
-      let rul : Rule.untyped_rule = { name= Delta(cst) ;
-                   ctx = [] ;
-                   pat = Pattern(lc, cst, []);
-                   rhs = te ;
-                 }
-      in Termination.add_rules [Rule.to_rule_infos rul]
+      DkRules.add_rule !graph (Delta cst) (Pattern (lc, cst, [])) te
     end
   | Rules(lc,rs) ->
     begin
@@ -49,7 +41,9 @@ let mk_entry md e =
       eprint l "Adding rewrite rules for '%a'" pp_name cst;
       List.iter (fun (_,x) -> eprint (get_loc_pat r.pat) "%a" pp_typed_rule x)
           (Env.add_rules rs); 
-      Termination.add_rules (List.map to_rule_infos rs)
+      List.iter
+        (fun (r : untyped_rule) -> DkRules.add_rule !graph r.name r.pat r.rhs)
+        rs
     end
   | Eval(_,_,_)
   | Infer(_,_,_)
@@ -57,30 +51,33 @@ let mk_entry md e =
   | DTree(_, _, _)
   | Print(_, _)
   | Name(_, _) -> ()
-  | Require(lc,md) ->
-      Env.import lc md;
-      Termination.import lc md
+  | Require(lc,md) -> DkRules.import lc md
+
 
 let run_on_file file=
+  Callgraph.initialize ();
   let input = open_in file in
-  Debug.debug Signature.D_module "Processing file '%s'..." file;
-  Termination.initialize ();
-  let last_point =
-    try String.rindex file '.'
-    with Not_found -> 0
-  in
-  let ext = Str.string_after file last_point in
-  if ext=".dk"
+  let (md,ext) =
+    let last_point =
+      begin
+        try String.rindex file '.'
+        with Not_found -> failwith "No file extension found"
+      end
+    in
+    (Str.string_before file last_point, Str.string_after file last_point) in
+  if ext = ".dk"
   then
     begin
       let md = Env.init file in
-      Parser.handle_channel md (mk_entry md) input
+      Parser.handle_channel md (mk_dk_entry md) input
     end
-  else
+  else if ext = ".xml"
+  then
     begin
-      let md = mk_mident (Str.string_before file last_point) in
-      List.iter (mk_entry md) (Tpdb_to_dk.load md file)
-    end;
+      let md = Env.init file in
+      Parser.handle_string md (mk_dk_entry md) (Tpdb_to_dk.load md file)
+    end
+  else failwith "Not handled file extension";
   let colored n s =
     if !Errors.color
     then "\027[3" ^ string_of_int n ^ "m" ^ s ^ "\027[m"
@@ -88,7 +85,7 @@ let run_on_file file=
   in
   let green  = colored 2 in
   let orange = colored 3 in
-  if Termination.termination_check ()
+  if Sizechange.check_sct !Callgraph.graph
   then Format.eprintf "%s@." (green "YES")
   else Format.eprintf "%s@." (orange "MAYBE");
   close_in input
@@ -107,31 +104,13 @@ let set_debug : string -> unit =
          Debug.enable_flag Callgraph.D_graph
        | Env.DebugFlagNotRecognized 'a' ->
          Debug.enable_flag Callgraph.D_call
-       | Env.DebugFlagNotRecognized 'p' ->
-         Debug.enable_flag Positivity.D_positivity
     ) st
-
+    
 let _ =
-  let run_on_stdin = ref None  in
   let options = Arg.align
-    [ ( "-d"
+     [( "-d"
       , Arg.String set_debug
-      , "flags enables debugging for all given flags [xsgap] and [qnocutrm] inherited from Dedukti" )
-    ; ( "-dkv"
-      , Arg.Unit (fun () -> set_debug "montru")
-      , " Verbose mode (equivalent to -d 'montru')" )
-    ; ( "-v"
-      , Arg.Unit (fun () -> set_debug "xsgap")
-      , " Verbose mode (equivalent to -d 'wsgap')" )
-    ; ( "-q"
-      , Arg.Unit (fun () -> set_debug "q")
-      , " Quiet mode (equivalent to -d 'q'" )
-    ; ( "-nc"
-      , Arg.Clear Errors.color
-      , " Disable colors in the output" )
-    ; ( "-stdin"
-      , Arg.String (fun n -> run_on_stdin := Some(n))
-      , "MOD Parses standard input using module name MOD" )]
+      , "flags enables debugging for all given flags [xsgap] and [qnocutrm] inherited from Dedukti" )]
   in
   let usage = "Usage: " ^ Sys.argv.(0) ^ " [OPTION]... [FILE]...\n" in
   let usage = usage ^ "Available options:" in
@@ -140,15 +119,4 @@ let _ =
     Arg.parse options (fun f -> files := f :: !files) usage;
     List.rev !files
   in
-  try
-    List.iter run_on_file files;
-    match !run_on_stdin with
-    | None   -> ()
-    | Some m ->
-      let md = Env.init m in
-      Parser.handle_channel md (mk_entry md) stdin;
-      Errors.success "Standard input was successfully checked.\n"
-  with
-  | Env.EnvError (l,e) -> Errors.fail_env_error l e
-  | Sys_error err      -> Errors.fail_sys_error err
-  | Exit               -> exit 3
+  List.iter run_on_file files

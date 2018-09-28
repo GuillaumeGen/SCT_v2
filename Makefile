@@ -4,7 +4,7 @@ VERSION = devel
 # Compile with "make Q=" to display the commands that are run.
 Q = @
 
-PKG = -package dedukti -package xml-light
+PKG = -package dedukti -package xml-light -package str
 
 .PHONY: all
 all: sct
