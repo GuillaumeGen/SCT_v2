@@ -63,6 +63,28 @@ module Matrix = functor (SR : SemiRing) -> struct
     fun n ->
       let tab= Array.init n (fun i -> Array.init n (fun j -> SR.add_neutral))
       in {h=n; w=n; tab}
+
+  let add_line : t -> t =
+    fun m ->
+      {h = m.h+1; w = m.w; 
+        tab = Array.init (m.h +1)
+                (fun i ->
+                   Array.init m.w
+                     (fun j ->
+                        if i<m.h then m.tab.(i).(j) else SR.add_neutral
+                     )
+              )}
+      
+  let add_column : t -> t =
+    fun m ->
+      {h = m.h; w = m.w+1; 
+        tab = Array.init m.h
+                (fun i ->
+                   Array.init (m.w +1)
+                     (fun j ->
+                        if j<m.w then m.tab.(i).(j) else SR.add_neutral
+                     )
+                )}
 end
 
 module Cmp = struct
@@ -122,3 +144,24 @@ module Cmp_matrix = struct
       false
     with Exit -> true
 end
+
+module Bool_matrix =
+  Matrix(struct
+    type t = bool
+
+    let pp          : t printer =
+      fun fmt b -> Format.printf "%s" (if b then "T" else "F")
+
+    let add_neutral : t = false
+
+    let plus        : t -> t -> t = (&&)
+
+    let mult        : t -> t -> t = (||)
+  end)
+
+let cstr : (string * int * string) list ref = ref []
+
+let initialize : unit -> unit =
+  fun () -> cstr := []
+
+

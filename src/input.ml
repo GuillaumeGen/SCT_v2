@@ -10,9 +10,10 @@ module type Input = sig
   
   val dig_in_rhs : term -> (string * term array) list
   val destruct_lhs : pattern -> (string * pattern array)
-  val get_arity : typ -> int
+  val get_typ : typ -> Callgraph.typ
   val compare : pattern -> term -> Cmp.t
   val rn_to_string : rule_name -> string
+  val accessed : rule_name -> term -> pattern -> (string * int * string) list
 end
 
 module StudyRules = functor (In : Input ) -> struct
@@ -20,7 +21,7 @@ module StudyRules = functor (In : Input ) -> struct
   (** Declare a symbol to be added in the call graph *)
   let declare : call_graph -> string -> In.typ -> unit =
     fun gr s t ->
-      let sym = { name = s; arity = In.get_arity t; result = []} in
+      let sym = { name = s; typ = In.get_typ t; result = []} in
       add_symb gr sym
 
   (** Add the calls associated to a rule in the call graph *)
@@ -43,7 +44,8 @@ module StudyRules = functor (In : Input ) -> struct
         add_call gr {caller = ind_l; callee = ind_r; matrix;
                      rule_name = In.rn_to_string rn }
       in
-      List.iter (fun c -> study_call lhs c) list_rhs
+      List.iter (fun c -> study_call lhs c) list_rhs;
+      cstr := !cstr @ (In.accessed rn t p)
       
 end
 
@@ -74,10 +76,22 @@ module Dk = struct
     | Pattern (_,f,l) -> (string_of_name f, Array.of_list l)
     | _ -> failwith "This is not a valid lhs of rule"
                                 
-  let rec get_arity : typ -> int =
+  let rec get_typ : typ -> Callgraph.typ =
     function
-    | Pi (_, _, _, t) -> 1 + (get_arity t)
-    | _ -> 0
+    | Kind              -> assert false
+    | Type _            -> Type
+    | Const (_, f)      -> Cst (string_of_name f)
+    | DB (_, _, _)      -> assert false
+    | App (t, _, _)     -> get_typ t
+    | Lam (_, _, _, _)  -> Unhandled
+    | Pi (_, _, t1, t2) ->
+      begin
+        let tt1 = get_typ t1 in
+        let tt2 = get_typ t2 in
+        match tt2 with
+        | Prod(l,u) -> Prod(tt1::l,u)
+        | x -> Prod([tt1],x)
+      end
 
   let compare : pattern -> term -> Cmp.t =
     (** Compare a term and a pattern, using an int indicating under how many lambdas the comparison occurs *)
@@ -118,6 +132,48 @@ module Dk = struct
     | Beta -> failwith "Beta should not occur in a rule declaration"
     | Delta n -> string_of_name n
     | Gamma(_, n) -> string_of_name n
+
+  let accessed : rule_name -> term -> pattern -> (string * int * string) list =
+    let rec used_var : int -> term -> int list =
+      fun shift ->
+        function
+        | Kind | Type _ -> assert false
+        | Const (_, _) -> []
+        | App (t1, t2, l) -> List.flatten (List.map (used_var shift) (t1::t2::l))
+        | Lam (_, _, _, t) -> used_var (shift+1) t
+        | Pi (_, _, t1, t2) -> (used_var shift t1)@(used_var (shift+1) t2)
+        | DB (_, _, i) -> if i < shift then [] else [i-shift]
+    in
+    let rec i_have_to_go_under_to_find : string -> int list -> int ->
+      (string * int * string) list -> pattern -> (string * int * string) list =
+      fun rn var_l shift cstr_l -> function
+        | Pattern (_, f, l) ->
+          List.flatten (
+            List.mapi
+              (fun i ->
+                 i_have_to_go_under_to_find rn var_l shift
+                   ((string_of_name f,i,rn)::cstr_l))
+              l)
+        | Var (_, _, i, l) -> (if List.mem (i-shift) var_l then cstr_l else [])
+                              @ (List.flatten (
+                                  List.mapi
+                                    (fun i ->
+                                       i_have_to_go_under_to_find rn var_l shift
+                                         cstr_l)
+                                    l)
+                                )
+        | Lambda (_, _, p) -> if (i_have_to_go_under_to_find rn var_l (shift+1)
+                                         cstr_l p) != [] then failwith "Using under lambda variables is not handled yet" else []
+        | Brackets t -> failwith "Brackets is a deprecated feature, not handled"
+    in
+    fun rn t ->
+      let var_l = used_var 0 t in
+      function
+      | Pattern (_, _, l) ->
+        List.flatten (
+          List.map (i_have_to_go_under_to_find (rn_to_string rn) var_l 0 []) l
+        )
+      | x -> assert false
 end
 
 module DkRules = struct

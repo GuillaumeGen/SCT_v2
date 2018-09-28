@@ -18,6 +18,7 @@ let pp_index fmt x =
 
 (** The local result express the result of the termination checker for this symbol *)
 type local_result = SelfLooping of string list
+                  | DefinableType of string
 
 (** The pretty printer for the type [local_result] *)
 let pp_local_result : local_result printer =
@@ -25,14 +26,23 @@ let pp_local_result : local_result printer =
     let st =
       match lr with
       | SelfLooping _ -> "Self Looping"
+      | DefinableType _ -> "Definable Type"
     in
     Format.fprintf fmt "%s" st
-  
+
+type typ = Type | Cst of string | Prod of (typ list) * typ | Unhandled
+
+let arity_of : typ -> int = function
+  | Type
+  | Cst _     -> 0
+  | Prod(l,_) -> List.length l
+  | Unhandled -> failwith "we should never check arity of such a type (I suppose it must be a beta-redex"
+
 (** Representation of a function symbol. *)
 type symbol =
   {
     name           : string            ; (** The identifier of the symbol *)
-    arity          : int               ; (** Arity of the symbol (number of args). *)
+    typ            : typ               ; (** Arity of the symbol (number of args). *)
     mutable result : local_result list ; (** The information about non termination for this symbol, initially empty *)
   }
 
@@ -178,16 +188,7 @@ let add_symb : call_graph -> symbol -> unit =
   fun gr sy ->
     gr.symbols := IMap.add !(gr.next_index) sy !(gr.symbols);
     incr gr.next_index;
-    let tab =
-      Array.init !(gr.next_index)
-        (fun i ->
-           Array.init !(gr.next_index)
-             (fun j ->
-                try !(gr.calls).tab.(i).(j)
-                with _ -> []
-             )
-        ) in
-    gr.calls := {h = !(gr.calls).h +1; w = !(gr.calls).w +1; tab}
+    gr.calls := CallGraphAdjMat.(add_line (add_column !(gr.calls)))
 
 let graph : call_graph ref = ref (new_graph ())
 
@@ -211,6 +212,9 @@ let index_and_arity_of : call_graph -> string -> index*int =
   fun gr s ->
     let symb = !(gr.symbols) in
     let k = find_symbol_key gr s in
-    let sym = IMap.find k symb in
-    k, sym.arity
+    k, (arity_of (IMap.find k symb).typ)
          
+let definable : call_graph -> string -> bool =
+  fun gr s ->
+    let k = find_symbol_key gr s in
+    Array.for_all (fun l -> l = []) !(gr.calls).tab.(k)
