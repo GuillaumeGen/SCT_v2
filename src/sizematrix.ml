@@ -145,23 +145,24 @@ module Cmp_matrix = struct
     with Exit -> true
 end
 
-module Bool_matrix =
-  Matrix(struct
-    type t = bool
+module Bool_matrix = struct 
+  include
+    Matrix(struct
+        type t = bool         
+        let pp          : t printer =
+          fun fmt b -> Format.printf "%s" (if b then "T" else "F")
+        let add_neutral : t = false
+        let plus        : t -> t -> t = (&&)
+        let mult        : t -> t -> t = (||)
+      end)
 
-    let pp          : t printer =
-      fun fmt b -> Format.printf "%s" (if b then "T" else "F")
+  let diago : int -> t =
+    fun n -> {h = n; w = n;
+              tab = Array.init n (fun i -> Array.init n (fun j -> i=j))}
+end
 
-    let add_neutral : t = false
-
-    let plus        : t -> t -> t = (&&)
-
-    let mult        : t -> t -> t = (||)
-  end)
-
+(** [cstr] are the constraints on type, coded by a triple, containing, the name of the constructor, the accessed argument and the name of the rule *)
 let cstr : (string * int * string) list ref = ref []
 
-let initialize : unit -> unit =
-  fun () -> cstr := []
 
 

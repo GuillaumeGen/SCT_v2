@@ -1,5 +1,4 @@
 open Basic
-open Parser
 
 module SString=Set.Make(struct
     type t=string

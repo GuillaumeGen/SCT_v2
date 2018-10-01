@@ -69,13 +69,13 @@ let run_on_file file=
   then
     begin
       let md = Env.init file in
-      Parser.handle_channel md (mk_dk_entry md) input
+      Parser.Parse_channel.handle md (mk_dk_entry md) input
     end
   else if ext = ".xml"
   then
     begin
       let md = Env.init file in
-      Parser.handle_string md (mk_dk_entry md) (Tpdb_to_dk.load md file)
+      Parser.Parse_string.handle md (mk_dk_entry md) (Tpdb_to_dk.load md file)
     end
   else failwith "Not handled file extension";
   let colored n s =
@@ -85,7 +85,8 @@ let run_on_file file=
   in
   let green  = colored 2 in
   let orange = colored 3 in
-  if Sizechange.check_sct !Callgraph.graph
+  if Positivity.check_positivity !Callgraph.graph !Sizematrix.cstr &&
+       Sizechange.check_sct !Callgraph.graph
   then Format.eprintf "%s@." (green "YES")
   else Format.eprintf "%s@." (orange "MAYBE");
   close_in input

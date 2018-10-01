@@ -4,7 +4,7 @@ open Sizematrix
 type Debug.flag += D_graph | D_call
 let _ = Debug.register_flag D_graph "Call graph";
   Debug.register_flag D_call "Call generation"
-
+                      
 (** Index of a rule. *)
 type index = int
 
@@ -19,6 +19,7 @@ let pp_index fmt x =
 (** The local result express the result of the termination checker for this symbol *)
 type local_result = SelfLooping of string list
                   | DefinableType of string
+                  | NotPositive of string
 
 (** The pretty printer for the type [local_result] *)
 let pp_local_result : local_result printer =
@@ -27,6 +28,7 @@ let pp_local_result : local_result printer =
       match lr with
       | SelfLooping _ -> "Self Looping"
       | DefinableType _ -> "Definable Type"
+      | NotPositive _ -> "Not positive"
     in
     Format.fprintf fmt "%s" st
 
@@ -193,7 +195,7 @@ let add_symb : call_graph -> symbol -> unit =
 let graph : call_graph ref = ref (new_graph ())
 
 let initialize : unit -> unit =
-  fun () -> graph := new_graph ()
+  fun () -> graph := new_graph (); cstr := []
         
 exception Success_index  of index
 
