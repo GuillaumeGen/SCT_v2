@@ -1,5 +1,7 @@
 open Basic
 
+let export_dk_file : bool ref = ref false
+
 module SString=Set.Make(struct
     type t=string
     let compare= compare

@@ -74,8 +74,13 @@ let run_on_file file=
   else if ext = ".xml"
   then
     begin
-      let md = Env.init file in
-      Parser.Parse_string.handle md (mk_dk_entry md) (Tpdb_to_dk.load md file)
+      let md2 = Env.init file in
+      let dk_string = Tpdb_to_dk.load md2 file in
+      if !(Tpdb_to_dk.export_dk_file)
+      then 
+        let output = Format.formatter_of_out_channel (open_out (md^".dk")) in
+        Format.fprintf output "%s@." dk_string;
+      Parser.Parse_string.handle md2 (mk_dk_entry md2) dk_string
     end
   else failwith "Not handled file extension";
   close_in input;
@@ -141,7 +146,26 @@ let _ =
   let options = Arg.align
      [( "-d"
       , Arg.String set_debug
-      , "flags enables debugging for all given flags [xsgap] and [qnocutrm] inherited from Dedukti" )]
+      , "flags enables debugging for all given flags [xsgap] and [qnocutrm] inherited from Dedukti" ) ;
+      ("--create-dk"
+      , Arg.Set Tpdb_to_dk.export_dk_file
+      , "create the dk file from an xml" ) ;
+      ( "--dk-v"
+      , Arg.Unit (fun () -> set_debug "montru")
+      , " Verbose mode (equivalent to -d 'montru')" ) ;
+      ( "--sz-v"
+      , Arg.Unit (fun () -> set_debug "xsga")
+      , " Verbose mode (equivalent to -d 'montru')" ) ;
+      ( "--verbose"
+      , Arg.Unit (fun () -> set_debug "montruxsga")
+      , " Verbose mode (equivalent to -d 'montru')" ) ;
+      ( "-q"
+      , Arg.Unit (fun () -> Env.set_debug_mode "q")
+      , " Quiet mode (equivalent to -d 'q'" ) ;
+      ( "-nc"
+      , Arg.Clear Errors.color
+      , " Disable colors in the output" )
+     ]
   in
   let usage = "Usage: " ^ Sys.argv.(0) ^ " [OPTION]... [FILE]...\n" in
   let usage = usage ^ "Available options:" in
