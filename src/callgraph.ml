@@ -26,9 +26,9 @@ let pp_local_result : local_result printer =
   fun fmt lr ->
     let st =
       match lr with
-      | SelfLooping _ -> "Self Looping"
-      | DefinableType _ -> "Definable Type"
-      | NotPositive _ -> "Not positive"
+      | SelfLooping _ -> "self looping"
+      | DefinableType _ -> "a definable type"
+      | NotPositive _ -> "not positive"
     in
     Format.fprintf fmt "%s" st
 
@@ -219,4 +219,4 @@ let index_and_arity_of : call_graph -> string -> index*int =
 let definable : call_graph -> string -> bool =
   fun gr s ->
     let k = find_symbol_key gr s in
-    Array.for_all (fun l -> l = []) !(gr.calls).tab.(k)
+    Array.exists (fun l -> not (l = [])) !(gr.calls).tab.(k)

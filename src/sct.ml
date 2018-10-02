@@ -78,6 +78,7 @@ let run_on_file file=
       Parser.Parse_string.handle md (mk_dk_entry md) (Tpdb_to_dk.load md file)
     end
   else failwith "Not handled file extension";
+  close_in input;
   let colored n s =
     if !Errors.color
     then "\027[3" ^ string_of_int n ^ "m" ^ s ^ "\027[m"
@@ -88,8 +89,37 @@ let run_on_file file=
   if Positivity.check_positivity !Callgraph.graph !Sizematrix.cstr &&
        Sizechange.check_sct !Callgraph.graph
   then Format.eprintf "%s@." (green "YES")
-  else Format.eprintf "%s@." (orange "MAYBE");
-  close_in input
+  else
+    begin
+      Format.eprintf "%s@." (orange "MAYBE");
+      let lc_result : Callgraph.symbol -> unit =
+        fun sy ->
+          if sy.result = []
+          then ()
+          else
+            List.iter
+              (fun lc ->
+                 Format.eprintf
+                   "\027[31m * %s is %a relatively to the rules\027[m@."
+                   sy.name
+                   pp_local_result lc;
+                   (match lc with
+                    | SelfLooping l   ->
+                      Format.eprintf "  - %a@."
+                        (pp_list "@.  - " Format.pp_print_string) l
+                    | DefinableType s ->
+                      Format.eprintf "  - %a@."
+                        Format.pp_print_string s
+                    | NotPositive s   ->
+                      Format.eprintf "  - %a@."
+                        Format.pp_print_string s
+                   )
+              )
+              sy.result in
+      IMap.iter (fun k -> lc_result) !(!Callgraph.graph.symbols)
+    end
+             
+           
 
 let set_debug : string -> unit =
   fun st ->
