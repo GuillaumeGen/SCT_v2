@@ -78,8 +78,8 @@ let run_on_file file=
       let dk_string = Tpdb_to_dk.load md2 file in
       if !(Tpdb_to_dk.export_dk_file)
       then 
-        let output = Format.formatter_of_out_channel (open_out (md^".dk")) in
-        Format.fprintf output "%s@." dk_string;
+        (let output = Format.formatter_of_out_channel (open_out (md^".dk")) in
+        Format.fprintf output "%s@." dk_string);
       Parser.Parse_string.handle md2 (mk_dk_entry md2) dk_string
     end
   else failwith "Not handled file extension";
