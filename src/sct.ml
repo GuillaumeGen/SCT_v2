@@ -106,7 +106,7 @@ let run_on_file file=
                    (match lc with
                     | SelfLooping l   ->
                       Format.eprintf "  - %a@."
-                        (pp_list "@.  - " Format.pp_print_string) l
+                        (pp_list "\n  - " Format.pp_print_string) l
                     | DefinableType s ->
                       Format.eprintf "  - %a@."
                         Format.pp_print_string s

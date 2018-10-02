@@ -162,8 +162,8 @@ module Dk = struct
                                          cstr_l)
                                     l)
                                 )
-        | Lambda (_, _, p) -> if (i_have_to_go_under_to_find rn var_l (shift+1)
-                                         cstr_l p) != [] then failwith "Using under lambda variables is not handled yet" else []
+        | Lambda (_, _, p) -> i_have_to_go_under_to_find rn var_l (shift+1)
+                                         cstr_l p
         | Brackets t -> failwith "Brackets is a deprecated feature, not handled"
     in
     fun rn t ->

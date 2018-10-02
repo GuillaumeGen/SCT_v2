@@ -152,8 +152,8 @@ module Bool_matrix = struct
         let pp          : t printer =
           fun fmt b -> Format.printf "%s" (if b then "T" else "F")
         let add_neutral : t = false
-        let plus        : t -> t -> t = (&&)
-        let mult        : t -> t -> t = (||)
+        let plus        : t -> t -> t = (||)
+        let mult        : t -> t -> t = (&&)
       end)
 
   let diago : int -> t =
