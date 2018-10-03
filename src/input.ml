@@ -8,10 +8,10 @@ module type Input = sig
   type typ
   type rule_name
   
-  val dig_in_rhs : term -> (string * term array) list
+  val dig_in_rhs : term -> (int * string * term array) list
   val destruct_lhs : pattern -> (string * pattern array)
   val get_typ : typ -> Callgraph.typ
-  val compare : pattern -> term -> Cmp.t
+  val compare : int -> pattern -> term -> Cmp.t
   val rn_to_string : rule_name -> string
   val accessed : rule_name -> term -> pattern -> (string * int * string) list
 end
@@ -29,7 +29,7 @@ module StudyRules = functor (In : Input ) -> struct
     fun gr rn p t ->
       let lhs = In.destruct_lhs p in
       let list_rhs = In.dig_in_rhs t in
-      let study_call (fun_l, arg_l) (fun_r, arg_r) =
+      let study_call (fun_l, arg_l) (nb, fun_r, arg_r) =
         let ind_l, h = index_and_arity_of gr fun_l in
         let ind_r, w = index_and_arity_of gr fun_r in
         let matrix : Cmp_matrix.t =
@@ -38,7 +38,7 @@ module StudyRules = functor (In : Input ) -> struct
         do
           for j=0 to (min w (Array.length arg_r)) -1
           do
-            matrix.tab.(i).(j) <- In.compare arg_l.(i) arg_r.(j)
+            matrix.tab.(i).(j) <- In.compare nb arg_l.(i) arg_r.(j)
           done
         done;
         add_call gr {caller = ind_l; callee = ind_r; matrix;
@@ -59,16 +59,17 @@ module Dk = struct
       (Basic.string_of_mident (Basic.md n))^"."^
       (Basic.string_of_ident (Basic.id n))
   
-  let rec dig_in_rhs : term -> (string * term array) list =
+  let rec dig_in_rhs : term -> (int * string * term array) list =
     function
     | Kind
     | Type _
     | DB (_, _, _) -> []
-    | Const (_, f) -> [string_of_name f, [||]]
-    | App (Const(_, f), t1, l) -> (string_of_name f, Array.of_list (t1 :: l)) :: List.concat (List.map dig_in_rhs (t1::l))
+    | Const (_, f) -> [0,string_of_name f, [||]]
+    | App (Const(_, f), t1, l) -> (0,string_of_name f, Array.of_list (t1 :: l)) :: List.concat (List.map dig_in_rhs (t1::l))
     | App (t0, t1, l) ->  List.concat (List.map dig_in_rhs (t0::t1::l))
-    | Lam (_, _, None, t) -> dig_in_rhs t
-    | Lam (_, _, Some ty, t) -> (dig_in_rhs ty) @ (dig_in_rhs t)
+    | Lam (_, _, None, t) -> List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs t)
+    | Lam (_, _, Some ty, t) ->
+      (dig_in_rhs ty) @ (List.map (fun (i,b,c) -> (i+1,b,c))(dig_in_rhs t))
     | Pi (_, _, t1, t2) -> (dig_in_rhs t1) @ (dig_in_rhs t2)
               
   let destruct_lhs : pattern -> (string * pattern array) =
@@ -93,17 +94,16 @@ module Dk = struct
         | x -> Prod([tt1],x)
       end
 
-  let compare : pattern -> term -> Cmp.t =
-    (** Compare a term and a pattern, using an int indicating under how many lambdas the comparison occurs *)
-    let rec comparison : int -> term -> pattern -> Cmp.t =
-      fun nb t p ->
+  (** Compare a term and a pattern, using an int indicating under how many lambdas the comparison occurs *)
+  let rec compare : int -> pattern -> term -> Cmp.t =
+      fun nb p t ->
         let rec comp_list : Cmp.t -> pattern list -> term list -> Cmp.t =
           fun cur lp lt ->
             match lp,lt with
             | [], _ | _, [] -> cur
             | a::l1, b::l2  ->
               begin
-                match (comparison nb b a), cur with
+                match (compare nb a b), cur with
 	        | _   , Infi -> assert false
                 (* We are sure, that the current state [cur] cannot contain a Infi, else the Infi would be the result of the function and no recursive call would be needed *)
                 | Infi, _    -> Infi
@@ -121,10 +121,10 @@ module Dk = struct
           begin
 	    comp_list Zero lp (t1::lt)
           end
-        | Pattern (_,_,l),t -> Cmp.minus1 (Cmp.mini (List.map (comparison nb t) l))
-        | Lambda(_,_,pp),Lam(_,_,_,tt) -> comparison nb tt pp
+        | Pattern (_,_,l),t ->
+          Cmp.minus1 (Cmp.mini (List.map (fun pp -> compare nb pp t) l))
+        | Lambda(_,_,pp),Lam(_,_,_,tt) -> compare nb pp tt
         | _ -> Infi
-    in fun p t -> comparison 0 t p
 
 
   let rn_to_string : rule_name -> string =

@@ -134,8 +134,10 @@ type call = {caller    : index;
 let pp_call : call_graph -> call printer=
   fun gr fmt cc ->
     let res=ref "" in
-    for i=0 to cc.matrix.h -1 do
-      res:=!res^"x"^(string_of_int i)^" "
+    let h = cc.matrix.h -1 in
+    for i=0 to h do
+      res:=!res^"x"^(string_of_int i);
+      if i < h then res := !res^" "
     done;
     Format.fprintf fmt "%s(%s%!) <- %s%!("
       (find_name gr cc.caller)
@@ -156,7 +158,7 @@ let pp_call : call_graph -> call printer=
             end
         done
       done;
-      Format.fprintf fmt ")%!"
+      Format.fprintf fmt ")"
 
 (** Those functions modify the mutable fields in the symbol records *)
 let update_result : call_graph -> index -> local_result -> unit =
@@ -181,6 +183,7 @@ let rec trans_clos : call_graph -> unit =
 let add_call : call_graph -> call -> unit =
   fun gr cc ->
     Debug.debug D_graph "New call: %a" (pp_call gr) cc;
+    Debug.debug D_graph "The matrix is %a" Cmp_matrix.pp cc.matrix;
     !(gr.calls).tab.(cc.caller).(cc.callee) <-
       ([cc.rule_name],cc.matrix) :: !(gr.calls).tab.(cc.caller).(cc.callee);
     trans_clos gr
@@ -190,6 +193,12 @@ let add_symb : call_graph -> symbol -> unit =
   fun gr sy ->
     gr.symbols := IMap.add !(gr.next_index) sy !(gr.symbols);
     incr gr.next_index;
+    Debug.debug D_graph "Les symboles sont : ";
+    let first = ref true in
+    IMap.iter
+      (fun k s -> Debug.debug D_graph "%s(%i,%s)"
+          (if !first then (first := false; ",") else "") k s.name)
+      !(gr.symbols);
     gr.calls := CallGraphAdjMat.(add_line (add_column !(gr.calls)))
 
 let graph : call_graph ref = ref (new_graph ())
