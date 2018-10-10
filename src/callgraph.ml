@@ -191,14 +191,9 @@ let add_call : call_graph -> call -> unit =
 (** Add a new symb to the call graph *)
 let add_symb : call_graph -> symbol -> unit =
   fun gr sy ->
+    Debug.debug D_graph "We add the symbol (%i,%s)" !(gr.next_index)  sy.name;
     gr.symbols := IMap.add !(gr.next_index) sy !(gr.symbols);
     incr gr.next_index;
-    Debug.debug D_graph "Les symboles sont : ";
-    let first = ref true in
-    IMap.iter
-      (fun k s -> Debug.debug D_graph "%s(%i,%s)"
-          (if !first then (first := false; ",") else "") k s.name)
-      !(gr.symbols);
     gr.calls := CallGraphAdjMat.(add_line (add_column !(gr.calls)))
 
 let graph : call_graph ref = ref (new_graph ())

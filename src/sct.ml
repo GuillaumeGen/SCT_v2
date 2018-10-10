@@ -152,13 +152,13 @@ let _ =
       , "create the dk file from an xml" ) ;
       ( "--dk-v"
       , Arg.Unit (fun () -> set_debug "montru")
-      , " Verbose mode (equivalent to -d 'montru')" ) ;
+      , " Verbose mode for Dedukti errors (equivalent to -d 'montru')" ) ;
       ( "--sz-v"
       , Arg.Unit (fun () -> set_debug "xsga")
-      , " Verbose mode (equivalent to -d 'montru')" ) ;
+      , " Verbose mode for SCT specific errors(equivalent to -d 'xsga')" ) ;
       ( "--verbose"
       , Arg.Unit (fun () -> set_debug "montruxsga")
-      , " Verbose mode (equivalent to -d 'montru')" ) ;
+      , " Most verbose mode (equivalent to -d 'montruxsga')" ) ;
       ( "-q"
       , Arg.Unit (fun () -> Env.set_debug_mode "q")
       , " Quiet mode (equivalent to -d 'q'" ) ;

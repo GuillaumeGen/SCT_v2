@@ -119,7 +119,9 @@ module Dk = struct
         | Lambda(_,_,Var(_,_,n,_)), App(DB(_,_,m),_,_) -> if n+nb=m+1 then Zero else Infi
         | Pattern (_,f,lp), App(Const(_,g),t1,lt) when (name_eq f g) ->
           begin
-	    comp_list Zero lp (t1::lt)
+	    let res1 = comp_list Zero lp (t1::lt) in
+            let res2 = Cmp.minus1 (Cmp.mini (List.map (fun pp -> compare nb pp t) lp)) in
+            Cmp.plus res1 res2 
           end
         | Pattern (_,_,l),t ->
           Cmp.minus1 (Cmp.mini (List.map (fun pp -> compare nb pp t) l))
