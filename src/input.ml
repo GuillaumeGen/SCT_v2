@@ -70,7 +70,7 @@ module Dk = struct
     | Lam (_, _, None, t) -> List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs t)
     | Lam (_, _, Some ty, t) ->
       (dig_in_rhs ty) @ (List.map (fun (i,b,c) -> (i+1,b,c))(dig_in_rhs t))
-    | Pi (_, _, t1, t2) -> (dig_in_rhs t1) @ (dig_in_rhs t2)
+    | Pi (_, _, t1, t2) -> (dig_in_rhs t1) @ (List.map (fun (i,b,c) -> (i+1,b,c))(dig_in_rhs t2))
               
   let destruct_lhs : pattern -> (string * pattern array) =
     function

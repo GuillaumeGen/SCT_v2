@@ -40,6 +40,12 @@ let arity_of : typ -> int = function
   | Prod(l,_) -> List.length l
   | Unhandled -> failwith "we should never check arity of such a type (I suppose it must be a beta-redex"
 
+let rec pp_typ fmt = function
+  | Type -> Format.fprintf fmt "Type"
+  | Unhandled -> Format.fprintf fmt "???"
+  | Cst f -> Format.fprintf fmt "%s" f
+  | Prod (l, t) -> Format.fprintf fmt "%a->%a" (pp_list "->" pp_typ) l pp_typ t 
+
 (** Representation of a function symbol. *)
 type symbol =
   {
