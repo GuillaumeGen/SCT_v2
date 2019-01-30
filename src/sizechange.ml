@@ -12,13 +12,15 @@ let _ = Debug.register_flag D_sctsummary "Summary of SCT"
 
 (** the main function, checking if calls are well-founded *)
 let check_sct : call_graph -> bool =
-  let rec check_list : ('a list * Cmp_matrix.t) list -> 'a list =
+  let rec check_list : (string list * Cmp_matrix.t) list -> string list =
     function
     | []      -> []
     | (x,m) :: tl ->
       begin
-        if Cmp_matrix.decreasing m
-        then check_list tl
+        let r = Cmp_matrix.decreasing m in
+        if r = [[]]
+        then
+          check_list tl
         else
           if Cmp_matrix.is_idempotent m
           then x

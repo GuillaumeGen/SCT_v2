@@ -1,6 +1,7 @@
 open Basic
 open Entry
 open Input
+open Symbols
 open Callgraph
 
 let mk_dk_entry md e =
@@ -97,7 +98,7 @@ let run_on_file file=
   else
     begin
       Format.eprintf "%s@." (orange "MAYBE");
-      let lc_result : Callgraph.symbol -> unit =
+      let lc_result : Symbols.symbol -> unit =
         fun sy ->
           if sy.result = []
           then ()

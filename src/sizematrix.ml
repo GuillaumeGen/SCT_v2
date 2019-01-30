@@ -1,6 +1,7 @@
 (** Tools used for the matrices labeling edges in the call-graph studied by sizechange.ml *)
 
 open Basic
+open Symbols
 
 type Debug.flag += D_matrix
 let _ = Debug.register_flag D_matrix "Call matrix"
@@ -88,61 +89,163 @@ module Matrix = functor (SR : SemiRing) -> struct
 end
 
 module Cmp = struct
-  (** Representation of the set {-1, 0, ∞} *)
-  type t = Min1 | Zero | Infi
 
+  type condition = Sm of index * index | Eq of index * index
+
+  let pp_cond : condition printer =
+    fun fmt ->
+    function
+    | Sm(i,j) -> Format.fprintf fmt "Sm(%i,%i)" i j
+    | Eq(i,j) -> Format.fprintf fmt "Eq(%i,%i)" i j
+                                                         
+  type dnf = condition list list
+
+  let pp_dnf : dnf printer =
+    pp_list ";" (pp_list "," pp_cond)
+               
+  let ou : dnf -> dnf -> dnf =
+    fun l1 l2 -> l1 @ l2
+
+  let et : dnf -> dnf -> dnf =                        
+    fun l1 l2 -> List.flatten (List.map (fun x -> List.map (fun y -> x@y) l1) l2)
+                              
+  type t = dnf * dnf
+                      
+  let rec rm_duplicate : 'a list -> 'a list =
+    function
+    | [] -> []
+    | a::l -> if List.mem a l then rm_duplicate l else a::(rm_duplicate l)
+                                                            
+  let useless_decr : dnf -> dnf =
+    let rec bis : dnf -> dnf -> dnf =
+      fun acc ->
+      function
+      | []   -> acc
+      | h::l ->
+         if List.exists (fun x -> List.for_all (fun y -> List.mem y h) x) (acc@l)
+         then bis acc l
+         else bis ((rm_duplicate h)::acc) l
+    in bis []
+
+  let _ =
+    Format.printf "On teste useless_decr:@.";
+    let d1 = [[Sm(1,2)];[Sm(1,2);Eq(1,3)]]
+    in Format.printf "%a@." pp_dnf (useless_decr d1)
+
+  let comp_cond : condition -> condition -> int =
+    fun c1 c2 ->
+    match c1,c2 with
+    | Sm(a,b), Sm(c,d)
+    | Eq(a,b), Eq(c,d)->
+       let res = compare a c in
+       if res = 0
+       then compare b d
+       else res
+    | Sm(_,_),_ -> 1
+    | Eq(_,_),_ -> -1
+                                
+  let comp_dnf : dnf -> dnf -> int =
+    let rec comp_cond_list : condition list -> condition list -> int =
+      fun l1 l2 ->
+      match l1, l2 with
+      | [],[] -> 0
+      | [],_  -> 1
+      | _, [] -> -1
+      | a::b,c::d ->
+         let res = comp_cond a c in
+         if res = 0
+         then comp_cond_list b d
+         else res
+    in
+    let rec comp_sorted_dnf : dnf -> dnf -> int =
+      fun l1 l2 ->
+      match l1,l2 with
+      | [],[] -> 0
+      | [],_  -> 1
+      | _, [] -> -1
+      | a::b,c::d ->
+         let res = comp_cond_list a c in
+         if res = 0
+         then comp_sorted_dnf b d
+         else res
+    in
+    fun l1 l2 ->
+    let ll1 = List.map (List.sort_uniq comp_cond) l1 in
+    let ll2 = List.map (List.sort_uniq comp_cond) l2 in
+    comp_sorted_dnf ll1 ll2
+                 
+                                
+  let clean : t -> t=
+    let useless_eq : t -> t =
+      let rec bis : dnf -> t -> t =
+        fun acc ->
+      function
+      | a,[]   -> a,acc
+      | a,h::l ->
+         if List.exists (fun x -> List.for_all (fun y -> List.mem y h) x) (a@acc@l)
+         then bis acc (a,l)
+         else bis ((rm_duplicate h)::acc) (a,l)
+      in bis []
+    in fun (a,b) -> useless_eq ((useless_decr a),b)
+                               
+  let compare_Cmp : t -> t -> int =
+    fun (sm1,eq1) (sm2,eq2) ->
+    let res = comp_dnf sm1 sm2 in
+    if res = 0
+    then comp_dnf eq1 eq2
+    else res
+                               
   (** String representation. *)
   let cmp_to_string : t -> string =
     function
-    | Min1 -> "<"
-    | Zero -> "="
-    | Infi -> "?"
+    | []  ,[]   -> "∞ "
+    | []  ,[[]] -> "= "
+    | []  ,_    -> "?="
+    | [[]],[]   -> "< "
+    | _         -> "?<"
 
+  let infi : t = [],[]
+  let min1 : t = [[]],[]
+  let zero : t = [],[[]]
+                      
   (** The pretty printer for the type [cmp] *)
   let pp fmt c=
     Format.fprintf fmt "%s" (cmp_to_string c)
 
-  let add_neutral = Infi
+  let add_neutral = infi
   
   (** Addition operation (minimum) *)
-  let plus : t -> t -> t = fun e1 e2 ->
-    match (e1, e2) with
-    | (Min1, _   ) | (_, Min1) -> Min1
-    | (Zero, _   ) | (_, Zero) -> Zero
-    | (Infi, Infi)             -> Infi
+  let plus : t -> t -> t =
+    fun (sm1,eq1) (sm2,eq2) ->
+      clean (ou sm1 sm2,ou eq1 eq2)
 
   (** Multiplication operation. *)
-  let mult : t -> t -> t = fun e1 e2 ->
-    match (e1, e2) with
-    | (Infi, _   ) | (_, Infi) -> Infi
-    | (Min1, _   ) | (_, Min1) -> Min1
-    | (Zero, Zero)             -> Zero
+  let mult : t -> t -> t =
+    fun (sm1,eq1) (sm2,eq2) ->
+      clean (ou (ou (et sm1 sm2) (et sm1 eq2)) (et eq1 sm2),et eq1 eq2)
 
   (** Reduce by 1 a cmp *)
   let minus1 : t -> t =
     function
-    | Zero -> Min1
-    | n -> n
+    | l1,l2 -> clean (l1@l2,[])
 
   (** Compute the minimum of a list *)
   let mini : t list -> t = fun l ->
-    List.fold_left plus Infi l
+    List.fold_left plus infi l
 end
 
 module Cmp_matrix = struct
   include Matrix(Cmp)
 
   (** Check if a matrix corresponds to a decreasing idempotent call. *)
-  let decreasing : t -> bool = fun m ->
+  let decreasing : t -> Cmp.dnf = fun m ->
     assert (m.h = m.w);
     (* Only square matrices labeling a self-looping arrow need to be study *)
-    try
-      for k = 0 to m.h-1 do
-        if m.tab.(k).(k) = Cmp.Min1
-        then raise Exit
-      done;
-      false
-    with Exit -> true
+    let ll = ref [] in
+    for k = 0 to m.h-1 do
+      ll:=!ll@(fst m.tab.(k).(k))
+    done;
+    Cmp.useless_decr !ll
 end
 
 module Bool_matrix = struct 

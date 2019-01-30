@@ -1,4 +1,5 @@
 open Basic
+open Symbols
 open Sizematrix
 open Callgraph
 
@@ -10,7 +11,7 @@ module type Input = sig
   
   val dig_in_rhs : term -> (int * string * term array) list
   val destruct_lhs : pattern -> (string * pattern array)
-  val get_typ : typ -> Callgraph.typ
+  val get_typ : typ -> Symbols.typ
   val compare : int -> pattern -> term -> Cmp.t
   val rn_to_string : rule_name -> string
   val accessed : rule_name -> term -> pattern -> (string * int * string) list
@@ -33,7 +34,7 @@ module StudyRules = functor (In : Input ) -> struct
         let ind_l, h = index_and_arity_of gr fun_l in
         let ind_r, w = index_and_arity_of gr fun_r in
         let matrix : Cmp_matrix.t =
-          {h; w; tab = Array.make_matrix h w Cmp.Infi} in
+          {h; w; tab = Array.make_matrix h w Cmp.infi} in
         for i=0 to (min h (Array.length arg_l)) -1
         do
           for j=0 to (min w (Array.length arg_r)) -1
@@ -77,7 +78,7 @@ module Dk = struct
     | Pattern (_,f,l) -> (string_of_name f, Array.of_list l)
     | _ -> failwith "This is not a valid lhs of rule"
                                 
-  let rec get_typ : typ -> Callgraph.typ =
+  let rec get_typ : typ -> Symbols.typ =
     function
     | Kind              -> assert false
     | Type _            -> Type
@@ -102,31 +103,24 @@ module Dk = struct
             match lp,lt with
             | [], _ | _, [] -> cur
             | a::l1, b::l2  ->
-              begin
-                match (compare nb a b), cur with
-	        | _   , Infi -> assert false
-                (* We are sure, that the current state [cur] cannot contain a Infi, else the Infi would be the result of the function and no recursive call would be needed *)
-                | Infi, _    -> Infi
-                | Min1, _    -> comp_list Min1 l1 l2
-      	        | _   , Min1 -> comp_list Min1 l1 l2
-      	        | Zero, Zero -> comp_list Zero l1 l2
-      	      end
+               comp_list (Cmp.mult (compare nb a b) cur) l1 l2
         in
         match p,t with
-        | Var (_,_,n,_), DB (_,_,m) -> if n+nb=m then Zero else Infi (* Two distinct variables are uncomparable *)
-        | Var (_,_,n,_), App(DB(_,_,m),_,_) -> if n+nb=m then Zero else Infi (* A variable when applied has the same size as if it was not applied *)
-        | Lambda(_,_,Var(_,_,n,_)), DB(_,_,m) -> if n+nb=m+1 then Zero else Infi
-        | Lambda(_,_,Var(_,_,n,_)), App(DB(_,_,m),_,_) -> if n+nb=m+1 then Zero else Infi
-        | Pattern (_,f,lp), App(Const(_,g),t1,lt) when (name_eq f g) ->
-          begin
-	    let res1 = comp_list Zero lp (t1::lt) in
-            let res2 = Cmp.minus1 (Cmp.mini (List.map (fun pp -> compare nb pp t) lp)) in
+        | Var (_,_,n,_), DB (_,_,m) -> if n+nb=m then Cmp.zero else Cmp.infi (* Two distinct variables are uncomparable *)
+        | Var (_,_,n,_), App(DB(_,_,m),_,_) -> if n+nb=m then Cmp.zero else Cmp.infi (* A variable when applied has the same size as if it was not applied *)
+        | Lambda(_,_,Var(_,_,n,_)), DB(_,_,m) -> if n+nb=m+1 then Cmp.zero else Cmp.infi
+        | Lambda(_,_,Var(_,_,n,_)), App(DB(_,_,m),_,_) -> if n+nb=m+1 then Cmp.zero else Cmp.infi
+        | Pattern (_,f,lp), App(Const(_,g),t1,lt) ->
+           begin
+             let get_index f = find_symbol_key !graph (string_of_name f) in
+	     let res1 = comp_list ([[Cmp.Sm(get_index f,get_index g)]],[[Cmp.Eq(get_index f,get_index g)]]) lp (t1::lt) in
+             let res2 = Cmp.minus1 (Cmp.mini (List.map (fun pp -> compare nb pp t) lp)) in
             Cmp.plus res1 res2 
           end
         | Pattern (_,_,l),t ->
           Cmp.minus1 (Cmp.mini (List.map (fun pp -> compare nb pp t) l))
         | Lambda(_,_,pp),Lam(_,_,_,tt) -> compare nb pp tt
-        | _ -> Infi
+        | _ -> Cmp.infi
 
 
   let rn_to_string : rule_name -> string =

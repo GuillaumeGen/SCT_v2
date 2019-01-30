@@ -1,3 +1,4 @@
+open Symbols
 open Sizematrix
 open Callgraph
 
