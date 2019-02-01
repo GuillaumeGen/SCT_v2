@@ -21,6 +21,13 @@ module Matrix = functor (SR : SemiRing) -> struct
   let pp : t printer = fun fmt m ->
     Format.fprintf fmt "[[%a]]"
       (pp_arr "]\n [" (pp_arr "," SR.pp)) m.tab
+
+  let copy : t -> t =
+    fun x ->
+    let h = x.h in
+    let w = x.w in
+    let tab = Array.init h (fun a -> Array.copy x.tab.(a)) in
+    {h; w; tab}
       
   let sum : t -> t -> t =
     fun m1 m2 ->
@@ -127,11 +134,6 @@ module Cmp = struct
          else bis ((rm_duplicate h)::acc) l
     in bis []
 
-  let _ =
-    Format.printf "On teste useless_decr:@.";
-    let d1 = [[Sm(1,2)];[Sm(1,2);Eq(1,3)]]
-    in Format.printf "%a@." pp_dnf (useless_decr d1)
-
   let comp_cond : condition -> condition -> int =
     fun c1 c2 ->
     match c1,c2 with
@@ -202,7 +204,10 @@ module Cmp = struct
     | []  ,[[]] -> "= "
     | []  ,_    -> "?="
     | [[]],[]   -> "< "
-    | _         -> "?<"
+    | l1  ,_ ->
+       Format.asprintf "[%a]"
+         (pp_list ";"
+            (fun fmt l -> Format.fprintf fmt "[%a]" (pp_list "," pp_cond) l)) l1
 
   let infi : t = [],[]
   let min1 : t = [[]],[]
@@ -245,6 +250,7 @@ module Cmp_matrix = struct
     for k = 0 to m.h-1 do
       ll:=!ll@(fst m.tab.(k).(k))
     done;
+    Format.printf "decreasing res : %a@." Cmp.pp_dnf (Cmp.useless_decr !ll);
     Cmp.useless_decr !ll
 end
 

@@ -113,7 +113,7 @@ module Dk = struct
         | Pattern (_,f,lp), App(Const(_,g),t1,lt) ->
            begin
              let get_index f = find_symbol_key !graph (string_of_name f) in
-	     let res1 = comp_list ([[Cmp.Sm(get_index f,get_index g)]],[[Cmp.Eq(get_index f,get_index g)]]) lp (t1::lt) in
+	     let res1 = comp_list ([[Cmp.Sm(get_index g,get_index f)]],[[Cmp.Eq(get_index g,get_index f)]]) lp (t1::lt) in
              let res2 = Cmp.minus1 (Cmp.mini (List.map (fun pp -> compare nb pp t) lp)) in
             Cmp.plus res1 res2 
           end

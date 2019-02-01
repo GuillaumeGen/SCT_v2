@@ -92,11 +92,17 @@ let run_on_file file=
   in
   let green  = colored 2 in
   let orange = colored 3 in
-  if Positivity.check_positivity !Callgraph.graph !Sizematrix.cstr &&
-       Sizechange.check_sct !Callgraph.graph
+  let b,l = Sizechange.check_sct !Callgraph.graph in
+  if Positivity.check_positivity !Callgraph.graph !Sizematrix.cstr && b
   then Format.eprintf "%s@." (green "YES")
   else
     begin
+      let syms = !(!(Callgraph.graph).symbols) in
+      List.iter
+        (fun (_,i,ll) ->
+          (IMap.find i syms).result <-
+            SelfLooping ll :: (IMap.find i syms).result)
+        l;
       Format.eprintf "%s@." (orange "MAYBE");
       let lc_result : Symbols.symbol -> unit =
         fun sy ->

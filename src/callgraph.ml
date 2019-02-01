@@ -66,13 +66,22 @@ type call_graph =
 (** Create a new graph *)
 let new_graph : unit -> call_graph =
   fun () ->
-    let syms = IMap.empty in
+    let symbs = IMap.empty in
     {
       next_index = ref 0;
-      symbols = ref syms;
+      symbols = ref symbs;
       calls = ref (CallGraphAdjMat.new_mat 0)
     }
 
+let copy_graph : call_graph -> call_graph =
+  fun g ->
+  let next_index = ref !(g.next_index) in
+  let symbols = ref IMap.empty in
+  IMap.iter (fun a b-> symbols := IMap.add a b !symbols) !(g.symbols);
+  let calls = ref (CallGraphAdjMat.copy !(g.calls)) in
+  {next_index; symbols; calls}
+  
+      
 let find_name : call_graph -> index -> string =
   fun gr i ->
     (IMap.find i !(gr.symbols)).name
