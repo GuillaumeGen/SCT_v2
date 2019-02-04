@@ -250,7 +250,6 @@ module Cmp_matrix = struct
     for k = 0 to m.h-1 do
       ll:=!ll@(fst m.tab.(k).(k))
     done;
-    Format.printf "decreasing res : %a@." Cmp.pp_dnf (Cmp.useless_decr !ll);
     Cmp.useless_decr !ll
 end
 
