@@ -12,4 +12,6 @@ available: [ ocaml-version >= "4.02" ]
 depends: ["menhir"
           "ocamlbuild"
           "dedukti" >= "2.5.1"
+          "xml-light"
+          "str"
 	  "ocamlfind" {build}]

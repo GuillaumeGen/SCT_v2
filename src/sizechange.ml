@@ -26,14 +26,14 @@ let check_sct : call_graph -> bool =
         end
   in
   fun gr ->
-    let syms = !(gr.symbols) in
-    let nb_fun = !(gr.next_index) in
+    let nb_fun = gr.signature.next_symb in
     let res = ref true in
     for i = 0 to nb_fun -1 do
-      let l = check_list !(gr.calls).tab.(i).(i) in
+      let l = check_list gr.calls.tab.(i).(i) in
       if l != []
       then (
-        (IMap.find i syms).result <- SelfLooping l :: (IMap.find i syms).result;
+        (Sign.find_symb gr.signature i).result <-
+          Sign.SelfLooping l :: (Sign.find_symb gr.signature i).result;
         res := false
       )
     done;

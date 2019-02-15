@@ -1,13 +1,8 @@
 (** Tools used for the matrices labeling edges in the call-graph studied by sizechange.ml *)
 
-open Basic
-
-type Debug.flag += D_matrix
-let _ = Debug.register_flag D_matrix "Call matrix"
-
 module type SemiRing = sig
   type t
-  val pp          : t printer
+  val pp          : t Basic.printer
   val add_neutral : t
   val plus        : t -> t -> t
   val mult        : t -> t -> t
@@ -17,9 +12,9 @@ module Matrix = functor (SR : SemiRing) -> struct
   type t = {h : int; w : int; tab : SR.t array array}
 
   (** The pretty printer for the type [matrix] *)
-  let pp : t printer = fun fmt m ->
+  let pp : t Printer.t = fun fmt m ->
     Format.fprintf fmt "[[%a]]"
-      (pp_arr "]\n [" (pp_arr "," SR.pp)) m.tab
+      (Basic.pp_arr "]\n [" (Basic.pp_arr "," SR.pp)) m.tab
       
   let sum : t -> t -> t =
     fun m1 m2 ->
@@ -149,7 +144,7 @@ module Bool_matrix = struct
   include
     Matrix(struct
         type t = bool         
-        let pp          : t printer =
+        let pp          : t Basic.printer =
           fun fmt b -> Format.printf "%s" (if b then "T" else "F")
         let add_neutral : t = false
         let plus        : t -> t -> t = (||)
@@ -160,9 +155,4 @@ module Bool_matrix = struct
     fun n -> {h = n; w = n;
               tab = Array.init n (fun i -> Array.init n (fun j -> i=j))}
 end
-
-(** [cstr] are the constraints on type, coded by a triple, containing, the name of the constructor, the accessed argument and the name of the rule *)
-let cstr : (string * int * string) list ref = ref []
-
-
 

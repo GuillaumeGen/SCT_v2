@@ -1,68 +1,10 @@
 open Basic
 open Sizematrix
+open Sign
 
 type Debug.flag += D_graph | D_call
 let _ = Debug.register_flag D_graph "Call graph";
   Debug.register_flag D_call "Call generation"
-                      
-(** Index of a rule. *)
-type index = int
-
-(** Conversion to int. *)
-let int_of_index : index -> int =
-  fun i -> i
-
-(** The pretty printer for the type [index] *)
-let pp_index fmt x =
-  Format.pp_print_int fmt (int_of_index x)
-
-(** The local result express the result of the termination checker for this symbol *)
-type local_result = SelfLooping of string list
-                  | DefinableType of string
-                  | NotPositive of string
-
-(** The pretty printer for the type [local_result] *)
-let pp_local_result : local_result printer =
-  fun fmt lr ->
-    let st =
-      match lr with
-      | SelfLooping _ -> "self looping"
-      | DefinableType _ -> "a definable type"
-      | NotPositive _ -> "not positive"
-    in
-    Format.fprintf fmt "%s" st
-
-type typ = Type | Cst of string | Prod of (typ list) * typ | Unhandled
-
-let arity_of : typ -> int = function
-  | Type
-  | Cst _     -> 0
-  | Prod(l,_) -> List.length l
-  | Unhandled -> failwith "we should never check arity of such a type (I suppose it must be a beta-redex"
-
-let rec pp_typ fmt = function
-  | Type -> Format.fprintf fmt "Type"
-  | Unhandled -> Format.fprintf fmt "???"
-  | Cst f -> Format.fprintf fmt "%s" f
-  | Prod (l, t) -> Format.fprintf fmt "%a->%a" (pp_list "->" pp_typ) l pp_typ t 
-
-(** Representation of a function symbol. *)
-type symbol =
-  {
-    name           : string            ; (** The identifier of the symbol *)
-    typ            : typ               ; (** Arity of the symbol (number of args). *)
-    mutable result : local_result list ; (** The information about non termination for this symbol, initially empty *)
-  }
-
-(** Map with index as keys. *)
-module IMap =
-  struct
-    include Map.Make(
-      struct
-        type t = index
-        let compare = compare
-      end)
-  end
 
 module EdgeLabel = struct
   type t = (string list * Cmp_matrix.t) list
@@ -111,34 +53,29 @@ module CallGraphAdjMat = Matrix(EdgeLabel)
 
 (** Internal state of the SCT, including the representation of symbols and the call graph. *)
 type call_graph =
-  {
-    next_index      : index ref             ; (** The index of the next function symbol to be added *)
-    symbols         : symbol IMap.t ref     ; (** A map containing every symbols studied *)
-    calls           : CallGraphAdjMat.t  ref; (** The adjacence matrix of the call graph *)
+  { (** The signature of the system *)
+    signature : Sign.signature
+  ; (** The adjacence matrix of the call graph *)
+    calls     : CallGraphAdjMat.t
   }
 
 (** Create a new graph *)
 let new_graph : unit -> call_graph =
   fun () ->
-    let syms = IMap.empty in
-    {
-      next_index = ref 0;
-      symbols = ref syms;
-      calls = ref (CallGraphAdjMat.new_mat 0)
+    { signature = new_signature ()
+    ; calls     = CallGraphAdjMat.new_mat 0
     }
 
-let find_name : call_graph -> index -> string =
-  fun gr i ->
-    (IMap.find i !(gr.symbols)).name
-
-type call = {caller    : index;
-             callee    : index;
-             matrix    : Cmp_matrix.t;
-             rule_name : string}
+type call =
+  { caller    : index
+  ; callee    : index
+  ; matrix    : Cmp_matrix.t
+  ; rule_name : Rules.rule_name
+  }
 
 (** The pretty printer for the type [call]. *)
-let pp_call : call_graph -> call printer=
-  fun gr fmt cc ->
+let pp_call : signature -> call printer=
+  fun si fmt cc ->
     let res=ref "" in
     let h = cc.matrix.h -1 in
     for i=0 to h do
@@ -146,8 +83,8 @@ let pp_call : call_graph -> call printer=
       if i < h then res := !res^" "
     done;
     Format.fprintf fmt "%s(%s%!) <- %s%!("
-      (find_name gr cc.caller)
-      !res (find_name gr cc.callee);
+      (find_symb si cc.caller).name
+      !res (find_symb si cc.callee).name;
     let jj=cc.matrix.h in
     if jj>0 then
       let ii=cc.matrix.w in
@@ -169,64 +106,36 @@ let pp_call : call_graph -> call printer=
 (** Those functions modify the mutable fields in the symbol records *)
 let update_result : call_graph -> index -> local_result -> unit =
   fun gr i res ->
-    let tbl = !(gr.symbols) in
-    let sy = (IMap.find i tbl) in
+    let sy = (IMap.find i gr.signature.symbols) in
     sy.result <- res::sy.result
 
 (** Compute the transitive closure of a call_graph *)
-let rec trans_clos : call_graph -> unit =
+let rec trans_clos : call_graph -> call_graph =
   fun gr ->
-    let m = !(gr.calls) in
-    let mm = CallGraphAdjMat.sum m (CallGraphAdjMat.prod m m) in
-    if m = mm
-    then ()
-    else (
-      gr.calls := mm;
-      trans_clos gr)
+  let m = gr.calls in
+  let mm = CallGraphAdjMat.sum m (CallGraphAdjMat.prod m m) in
+  if m = mm
+  then gr
+  else trans_clos {gr with calls = mm}
 
 (** Add a new call to the call graph.
     We maintain the transitive closure computed at each step. *)
-let add_call : call_graph -> call -> unit =
+let add_call : call_graph -> call -> call_graph =
   fun gr cc ->
-    Debug.debug D_graph "New call: %a" (pp_call gr) cc;
-    Debug.debug D_graph "The matrix is %a" Cmp_matrix.pp cc.matrix;
-    !(gr.calls).tab.(cc.caller).(cc.callee) <-
-      ([cc.rule_name],cc.matrix) :: !(gr.calls).tab.(cc.caller).(cc.callee);
-    trans_clos gr
+  let si = gr.signature in
+  Debug.debug D_graph "New call: %a" (pp_call si) cc;
+  Debug.debug D_graph "The matrix is %a" Cmp_matrix.pp cc.matrix;
+  (gr.calls).tab.(cc.caller).(cc.callee) <-
+    ([cc.rule_name],cc.matrix) :: (gr.calls).tab.(cc.caller).(cc.callee);
+  trans_clos gr
 
 (** Add a new symb to the call graph *)
-let add_symb : call_graph -> symbol -> unit =
+let add_symb : call_graph -> symbol -> call_graph =
   fun gr sy ->
-    Debug.debug D_graph "We add the symbol (%i,%s)" !(gr.next_index)  sy.name;
-    gr.symbols := IMap.add !(gr.next_index) sy !(gr.symbols);
-    incr gr.next_index;
-    gr.calls := CallGraphAdjMat.(add_line (add_column !(gr.calls)))
+  { signature = add_symb gr.signature sy
+  ; calls     = CallGraphAdjMat.(add_line (add_column (gr.calls)))}
 
-let graph : call_graph ref = ref (new_graph ())
-
-let initialize : unit -> unit =
-  fun () -> graph := new_graph (); cstr := []
-        
-exception Success_index  of index
-
-(** [find_rule_key r] will return the key [k] which is mapped to the rule [r] *)
-let find_symbol_key : call_graph -> string ->  index
-  = fun gr s ->
-    try
-      IMap.iter
-        (
-	  fun k x -> if x.name = s then raise (Success_index k)
-        ) !(gr.symbols);
-      raise Not_found
-    with Success_index k -> k
-
-let index_and_arity_of : call_graph -> string -> index*int =
-  fun gr s ->
-    let symb = !(gr.symbols) in
-    let k = find_symbol_key gr s in
-    k, (arity_of (IMap.find k symb).typ)
-         
 let definable : call_graph -> string -> bool =
   fun gr s ->
-    let k = find_symbol_key gr s in
-    Array.exists (fun l -> not (l = [])) !(gr.calls).tab.(k)
+    let k = find_symbol_index (gr.signature) s in
+    Array.exists (fun l -> not (l = [])) (gr.calls).tab.(k)
