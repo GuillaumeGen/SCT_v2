@@ -6,6 +6,7 @@ open Callgraph
 open Call_extractor
 
 let str_of_name = string_of pp_name
+let mod_export = "sct_export"
 
 let term_iter : (int -> ident -> unit) -> (name -> unit) -> unit -> term -> unit =
   fun f_var f_cst f_typ ->
@@ -20,7 +21,7 @@ let term_iter : (int -> ident -> unit) -> (name -> unit) -> unit -> term -> unit
     | Lam(_,_,Some a, t) -> aux a; aux t
     | Pi(_,_,a,b)        -> aux a; aux b
   in aux
-                
+
 let pre_rule_of_rinfos : Rule.rule_infos -> Rules.pre_rule =
   fun r ->
   let name =
@@ -31,9 +32,33 @@ let pre_rule_of_rinfos : Rule.rule_infos -> Rules.pre_rule =
   in
   let args = Array.of_list (List.map Rule.pattern_to_term r.args) in
   let ctx = Array.init r.esize (fun _ -> dmark) in
-  
   {name; args; rhs = r.rhs; head = r.cst; ctx}
-                
+
+let rule_info_of_pre_rule : Rules.pre_rule -> Rule.rule_infos =
+  fun r -> Rule.(
+    let rule_name_conversion rn =
+      Gamma (false,mk_name (mk_mident mod_export) (mk_ident rn)) in
+    let rec pattern_of_term =
+      function
+      | DB(l,id,n)             -> Var(l,id,n,[])
+      | Const(l,nam)           -> Pattern(l,nam,[])
+      | App(DB(l,id,n),u,tl)   -> Var(l,id,n,List.map pattern_of_term (u::tl))
+      | App(Const(l,nam),u,tl) ->
+         Pattern(l,nam,List.map pattern_of_term (u::tl))
+      | Lam(l,id,_,t)          -> Lambda(l,id,pattern_of_term t)
+      | _                      -> assert false
+    in
+    let pattern_of_pre_rule : Rules.pre_rule -> Rule.pattern =
+      fun r ->
+      Pattern(dloc,r.head,List.map pattern_of_term (Array.to_list r.args)) in
+    let ur = {
+        name = rule_name_conversion r.name
+    ; ctx = List.map (fun x -> dloc,x) (Array.to_list r.ctx)
+    ; pat = pattern_of_pre_rule r
+    ; rhs = r.rhs
+    }
+    in to_rule_infos ur)
+
 let add_symb_infos : call_graph -> Signature.symbol_infos -> call_graph =
   fun gr sy ->
   let sym = new_symb sy.ident sy.ty in
@@ -72,3 +97,26 @@ let to_dk_signature : string -> entry list -> Signature.t =
   in
   List.iter mk_entry entries;
   sg
+
+let export_to_dk : call_graph -> Signature.t =
+  fun gr ->
+  let res = Signature.make "sct_export" in
+  let si = gr.signature in
+  IMap.iter
+    (fun _ s ->
+      Signature.add_declaration
+        res dloc (id s.name) (definable gr s.name) (s.typ))
+    si.symbols;
+  IMap.iter
+    (fun _ r ->
+      Signature.add_rules
+        res [rule_info_of_pre_rule r])
+    si.rules;
+  res
+
+let type_rule : Rules.pre_rule -> Callgraph.call_graph -> Rules.typed_rule =
+  fun r gr ->
+  let s = export_to_dk gr in
+  let ri = rule_info_of_pre_rule r in
+  let tyr = Typing.typed_rule_of_rule_infos s ri in
+  {r with ctx = Array.of_list (List.map (fun (_,a,b) -> a,b) (snd tyr).ctx)}

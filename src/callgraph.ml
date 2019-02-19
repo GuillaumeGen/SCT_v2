@@ -21,10 +21,10 @@ module EdgeLabel = struct
       assert (m1.h = m2.h);
       assert (m1.w = m2.w);
       let res = ref 0 in
-      for i = 0 to m1.h -1 do 
+      for i = 0 to m1.h -1 do
         for j = 0 to m1.w -1 do
           if !res = 0
-          then 
+          then
             res := Cmp.(match (m1.tab.(i).(j),m2.tab.(i).(j)) with
               | Infi, Infi -> 0
               | Infi, _    -> 1
@@ -135,7 +135,9 @@ let add_symb : call_graph -> symbol -> call_graph =
   { signature = add_symb gr.signature sy
   ; calls     = CallGraphAdjMat.(add_line (add_column (gr.calls)))}
 
-let definable : call_graph -> name -> bool =
+let definable : call_graph -> name -> Signature.staticity =
   fun gr s ->
     let k = find_symbol_index (gr.signature) s in
-    Array.exists (fun l -> not (l = [])) (gr.calls).tab.(k)
+    if Array.exists (fun l -> not (l = [])) (gr.calls).tab.(k)
+    then Signature.Definable
+    else Signature.Static

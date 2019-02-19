@@ -8,19 +8,19 @@ type local_result =
   (** If a call from a symbol to itself lead to potentially non-terminating sequence *)
   | SelfLooping  of Rules.rule_name list
   (** Variables at non-positive position under this constructor are accessed *)
-  | NotPositive  of Rules.rule_name
+  | NotPFP  of Rules.rule_name
   (** The rhs of this rule is not typable without adding constraints inferred from the lhs *)
   | RhsUntypable of Rules.rule_name
   (** The lhs of this rule has too many arguments compared to the declared type of the head symbol. *)
-  | LhsOverApplied of Rules.rule_name 
-    
+  | LhsOverApplied of Rules.rule_name
+
 (** The pretty printer for the type [local_result] *)
 let pp_local_result : local_result printer =
   fun fmt lr ->
     let st =
       match lr with
       | SelfLooping _    -> "self looping"
-      | NotPositive _    -> "not positive"
+      | NotPFP _         -> "not PFP"
       | RhsUntypable _   -> "rhs is untypable"
       | LhsOverApplied _ -> "lhs over applied"
     in
@@ -30,9 +30,9 @@ type symbol =
   { (** Identifier of the symbol *)
     name           : name
   ; (** Type of the symbol *)
-    typ            : Term.term           
+    typ            : Term.term
   ; (** The information about non termination for this symbol, initially empty *)
-    mutable result : local_result list  
+    mutable result : local_result list
   }
 
 let new_symb : name -> Term.term -> symbol =
@@ -40,7 +40,7 @@ let new_symb : name -> Term.term -> symbol =
 
 let update_result : symbol -> local_result -> unit =
   fun sy res -> sy.result <- res::sy.result
-                
+
 (** Index of a rule. *)
 type index = int
 
@@ -60,10 +60,10 @@ module IMap =
         type t = index
         let compare = compare
       end)
-                    
+
     (** The exception [Success_index] is here only to reverse the [IMap] *)
     exception Success_index  of index
-                                  
+
     (** [find_key map f] will return a key [k] which is mapped to an element [n] such that [f n = true] *)
     let find_key : 'a t -> ('a -> bool) -> index =
       fun map f ->

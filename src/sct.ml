@@ -3,8 +3,11 @@ open Dk
 
 let perform_checks : Callgraph.call_graph -> bool =
   fun gr ->
-  Sizechange.check_sct gr && Arity_checker.check_lh_arity gr.signature
-   
+  Sizechange.check_sct gr
+  && Arity_checker.check_lh_arity gr.signature
+  && Pfp_checker.check_pfp gr
+  && Rhs_typability.check_rhs_underf_typab gr
+
 let run_on_file file=
   let input = open_in file in
   let md = Filename.remove_extension (Filename.basename file) in
@@ -32,4 +35,3 @@ let run_on_file file=
   in
   close_in input;
   perform_checks gr
-       

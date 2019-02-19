@@ -17,7 +17,7 @@ module Matrix = functor (SR : SemiRing) -> struct
   let pp : t printer = fun fmt m ->
     Format.fprintf fmt "[[%a]]"
       (Basic.pp_arr "]\n [" (Basic.pp_arr "," SR.pp)) m.tab
-      
+
   let sum : t -> t -> t =
     fun m1 m2 ->
       assert (m1.h = m2.h);
@@ -30,7 +30,7 @@ module Matrix = functor (SR : SemiRing) -> struct
              )
         )
       in {h=m1.h; w=m1.w; tab}
-    
+
   let prod : t -> t -> t =
     fun m1 m2 ->
       assert (m1.w = m2.h);
@@ -54,7 +54,7 @@ module Matrix = functor (SR : SemiRing) -> struct
       assert (m.h = m.w);
       (* only square matrix can be idempotent *)
       m = (prod m m)
-        
+
   (** Create a new square matrix of size [n] *)
   let new_mat : int -> t =
     fun n ->
@@ -63,7 +63,7 @@ module Matrix = functor (SR : SemiRing) -> struct
 
   let add_line : t -> t =
     fun m ->
-      {h = m.h+1; w = m.w; 
+      {h = m.h+1; w = m.w;
         tab = Array.init (m.h +1)
                 (fun i ->
                    Array.init m.w
@@ -71,10 +71,10 @@ module Matrix = functor (SR : SemiRing) -> struct
                         if i<m.h then m.tab.(i).(j) else SR.add_neutral
                      )
               )}
-      
+
   let add_column : t -> t =
     fun m ->
-      {h = m.h; w = m.w+1; 
+      {h = m.h; w = m.w+1;
         tab = Array.init m.h
                 (fun i ->
                    Array.init (m.w +1)
@@ -100,7 +100,7 @@ module Cmp = struct
     Format.fprintf fmt "%s" (cmp_to_string c)
 
   let add_neutral = Infi
-  
+
   (** Addition operation (minimum) *)
   let plus : t -> t -> t = fun e1 e2 ->
     match (e1, e2) with
@@ -142,10 +142,11 @@ module Cmp_matrix = struct
     with Exit -> true
 end
 
-module Bool_matrix = struct 
+(** Those bool matrices are relation matrices [plus (diago n) M] is the reflexive closure of [M] and [trans_clos M] is the transitive closure of [M] *)
+module Bool_matrix = struct
   include
     Matrix(struct
-        type t = bool         
+        type t = bool
         let pp          : t Basic.printer =
           fun fmt b -> Format.printf "%s" (if b then "T" else "F")
         let add_neutral : t = false
@@ -156,5 +157,12 @@ module Bool_matrix = struct
   let diago : int -> t =
     fun n -> {h = n; w = n;
               tab = Array.init n (fun i -> Array.init n (fun j -> i=j))}
-end
 
+  let rec trans_clos : t -> t =
+    fun m ->
+    assert (m.h = m.w);
+    let mm = sum m (prod m m) in
+    if m = mm
+    then m
+    else trans_clos mm
+end
