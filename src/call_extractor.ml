@@ -1,41 +1,30 @@
-open Terms
+open Term
 open Rules
 open Sign
 open Sizematrix
 open Callgraph
 
-let rec dig_in_rhs : term -> (int * string * obj array) list =
+let rec dig_in_rhs : term -> (int * Basic.name * term array) list =
   function
-  | Obj(Var(_))     -> []
-  | Obj(Const(f))
-  | Pred(PConst(f)) -> [0, f, [||]]
-  | Obj(App(Const(f),l)) ->
-     let ll = List.map (fun x -> Obj x) l in
+  | Kind 
+    | Type(_) -> assert false
+  | DB(_,_,_) -> []
+  | Const(_,f) -> [0, f, [||]] 
+  | App(Const(_,f),u,l) ->
      (0, f, Array.of_list l)
-     :: List.concat (List.map dig_in_rhs ll)
-  | Pred(PApp(PConst(f),l)) ->
-     let ll = List.map (fun x -> Obj x) l in
-     (0, f, Array.of_list l)
-     :: List.concat (List.map dig_in_rhs ll)
-  | Obj(App(t,l)) ->
-     let ll = List.map (fun x -> Obj x) l in
-     List.concat (List.map dig_in_rhs (Obj(t)::ll))
-  | Pred(PApp(t,l)) ->
-     let ll = List.map (fun x -> Obj(x)) l in
-     List.concat (List.map dig_in_rhs (Pred(t)::ll))
-  | Obj(Abst(x,ty,t)) ->
-     (dig_in_rhs (Pred ty))
-     @ (List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs (Obj t)))
-  | Pred(PAbst(_,ty,t)) ->
-     (dig_in_rhs (Pred ty))
-     @ (List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs (Pred t)))
-  | Pred(PProd(_,a,b)) ->
-     (dig_in_rhs (Pred a))
-     @ (List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs (Pred b)))
+     :: List.concat (List.map dig_in_rhs (u::l))
+  | App(t,u,l) ->
+     List.concat (List.map dig_in_rhs (t::u::l))
+  | Lam(_,x,None,t) ->
+     List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs t)
+  | Lam(_,x,Some ty,t) ->
+     (dig_in_rhs ty) @ (List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs t))
+  | Pi(_,_,a,b) ->
+     (dig_in_rhs a) @ (List.map (fun (i,b,c) -> (i+1,b,c)) (dig_in_rhs b))
 
-let rec compare_term : int -> obj -> obj -> Cmp.t =
+let rec compare_term : int -> term -> term -> Cmp.t =
   fun i t_l t_r ->
-  let rec comp_list : Cmp.t -> obj list -> obj list -> Cmp.t =
+  let rec comp_list : Cmp.t -> term list -> term list -> Cmp.t =
     fun cur lp lt ->
     match lp,lt with
     | [], _ | _, [] -> cur
@@ -52,28 +41,29 @@ let rec compare_term : int -> obj -> obj -> Cmp.t =
   in
   match t_l,t_r with
   (* Two distinct variables are uncomparable *)
-  | Var (_,n), Var (_,m)
+  | DB (_,_,n), DB (_,_,m)
   (* A variable when applied has the same size as if it was not applied *)
-  | Var (_,n), App(Var(_,m),_) -> if n + i = m then Zero else Infi
-  | App (Const f,lp), App(Const g,lt) when f = g ->
+  | DB (_,_,n), App(DB(_,_,m),_,_) -> if n + i = m then Zero else Infi
+  | App (Const(_,f),up,lp), App(Const(_,g),ut,lt) when f = g ->
      begin
-       let res1 = comp_list Zero lp lt in
+       let res1 = comp_list Zero (up::lp) (ut::lt) in
        let res2 =
          Cmp.minus1 (
              Cmp.mini (
-                 List.map (fun t_ll -> compare_term i t_ll t_r) lp
+                 List.map (fun t_ll -> compare_term i t_ll t_r) (up::lp)
                )
            ) in
        Cmp.plus res1 res2 
      end
-  | App (_,l),_ ->
-     Cmp.minus1 (Cmp.mini (List.map (fun t_ll -> compare_term i t_ll t_r) l))
-  | Abst(_,_,t_ll),Abst(_,_,t_rr) -> compare_term i t_ll t_rr
+  | App (_,u,l),_ ->
+     Cmp.minus1
+       (Cmp.mini (List.map (fun t_ll -> compare_term i t_ll t_r) (u::l)))
+  | Lam(_,_,_,t_ll),Lam(_,_,_,t_rr) -> compare_term i t_ll t_rr
   | _ -> Infi
   
          
-let study_call : signature -> index -> obj array ->
-                 int -> index -> obj array -> Cmp_matrix.t =
+let study_call : signature -> index -> term array ->
+                 int -> index -> term array -> Cmp_matrix.t =
   fun si fun_l arg_l nb fun_r arg_r ->
   let h = arity_of (find_symb si fun_l).typ in
   let w = arity_of (find_symb si fun_r).typ in
@@ -89,7 +79,7 @@ let study_call : signature -> index -> obj array ->
   matrix
          
 (** Add the calls associated to a rule in the call graph *)
-let add_rule : call_graph -> rule -> call_graph =
+let add_rule : call_graph -> pre_rule -> call_graph =
   fun gr r ->
   let sign = gr.signature in
   let ind_l = find_symbol_index sign r.head in

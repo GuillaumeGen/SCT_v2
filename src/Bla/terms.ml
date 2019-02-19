@@ -1,3 +1,5 @@
+open Basic
+
 type obj =
   (** Variables with de Bruijn index and name *)
   | Var   of string * int
@@ -5,8 +7,8 @@ type obj =
   | Const of string
   (** f [a1 ; a2 ; ... an ] , with the guarantee that f is not an App and the list is not empty *)
   | App   of obj * obj list
-  (** Lambda abstraction with the name of the variable, its type and the body of the abstraction. *)
-  | Abst   of string * predicate * obj
+  (** Lambda abstraction with the name of the variable, its type and the body of the abstraction. The type annotation is optional, since we don't want to put it in lhs of rules. *)
+  | Abst   of string * predicate option * obj
 
 and predicate =
   (** Symbol of the signature *)
@@ -14,7 +16,7 @@ and predicate =
   (** f [a1 ; a2 ; ... an ] , with the guarantee that f is not an App and the list is not empty *)
   | PApp   of predicate * obj list
   (** Lambda abstraction *)
-  | PAbst  of string * predicate * predicate
+  | PAbst  of string * predicate option * predicate
   (** Pi abstraction *)
   | PProd  of string * predicate * predicate
                                      
@@ -24,24 +26,29 @@ type kind =
   (** Pi abstraction *)
   | KProd    of string * predicate * kind  
 
-let rec pp_obj : obj Basic.printer =
+let rec pp_obj : obj printer =
   fun fmt ->
   function
   | Var(s,_)    -> Format.fprintf fmt "%s" s
   | Const(s)    -> Format.fprintf fmt "%s" s
   | App(t,l)    ->
-     Format.fprintf fmt "%a %a" pp_obj t (Basic.pp_list " " pp_obj) l
-  | Abst(x,p,o) -> Format.fprintf fmt "λ(%s:%a),%a" x pp_pred p pp_obj o
-and pp_pred : predicate Basic.printer =
+     Format.fprintf fmt "%a %a" pp_obj t (pp_list " " pp_obj) l
+  | Abst(x,p,o) ->
+     Format.fprintf fmt "λ(%s%a),%a" x
+       (pp_option "" (fun fmt -> Format.fprintf fmt ":%a" pp_pred)) p pp_obj o
+    
+and pp_pred : predicate printer =
   fun fmt ->
   function
   | PConst(s)    -> Format.fprintf fmt "%s" s
   | PApp(p,l)    ->
      Format.fprintf fmt "%a %a" pp_pred p (Basic.pp_list " " pp_obj) l
-  | PAbst(x,p,t) -> Format.fprintf fmt "λ(%s:%a),%a" x pp_pred p pp_pred t
+  | PAbst(x,p,t) ->
+     Format.fprintf fmt "λ(%s:%a),%a" x
+       (pp_option "" (fun fmt -> Format.fprintf fmt ":%a" pp_pred)) p pp_pred t
   | PProd(x,p,t) -> Format.fprintf fmt "Π(%s:%a),%a" x pp_pred p pp_pred t
 
-let rec pp_kind : kind Basic.printer =
+let rec pp_kind : kind printer =
   fun fmt ->
   function
   | Type         -> Format.fprintf fmt "Type"

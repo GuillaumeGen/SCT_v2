@@ -82,9 +82,9 @@ let pp_call : signature -> call printer=
       res:=!res^"x"^(string_of_int i);
       if i < h then res := !res^" "
     done;
-    Format.fprintf fmt "%s(%s%!) <- %s%!("
-      (find_symb si cc.caller).name
-      !res (find_symb si cc.callee).name;
+    Format.fprintf fmt "%a(%s%!) <- %a%!("
+      pp_name (find_symb si cc.caller).name
+      !res pp_name (find_symb si cc.callee).name;
     let jj=cc.matrix.h in
     if jj>0 then
       let ii=cc.matrix.w in
@@ -135,7 +135,7 @@ let add_symb : call_graph -> symbol -> call_graph =
   { signature = add_symb gr.signature sy
   ; calls     = CallGraphAdjMat.(add_line (add_column (gr.calls)))}
 
-let definable : call_graph -> string -> bool =
+let definable : call_graph -> name -> bool =
   fun gr s ->
     let k = find_symbol_index (gr.signature) s in
     Array.exists (fun l -> not (l = [])) (gr.calls).tab.(k)

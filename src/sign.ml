@@ -10,28 +10,37 @@ type local_result =
   (** Variables at non-positive position under this constructor are accessed *)
   | NotPositive  of Rules.rule_name
   (** The rhs of this rule is not typable without adding constraints inferred from the lhs *)
-  | RhsUntypable of Rules.rule_name 
+  | RhsUntypable of Rules.rule_name
+  (** The lhs of this rule has too many arguments compared to the declared type of the head symbol. *)
+  | LhsOverApplied of Rules.rule_name 
     
 (** The pretty printer for the type [local_result] *)
 let pp_local_result : local_result printer =
   fun fmt lr ->
     let st =
       match lr with
-      | SelfLooping _  -> "self looping"
-      | NotPositive _  -> "not positive"
-      | RhsUntypable _ -> "rhs is untypable"
+      | SelfLooping _    -> "self looping"
+      | NotPositive _    -> "not positive"
+      | RhsUntypable _   -> "rhs is untypable"
+      | LhsOverApplied _ -> "lhs over applied"
     in
     Format.fprintf fmt "%s" st
 
 type symbol =
   { (** Identifier of the symbol *)
-    name           : string
+    name           : name
   ; (** Type of the symbol *)
-    typ            : Terms.typ           
+    typ            : Term.term           
   ; (** The information about non termination for this symbol, initially empty *)
     mutable result : local_result list  
   }
 
+let new_symb : name -> Term.term -> symbol =
+  fun name typ -> {name; typ; result = []}
+
+let update_result : symbol -> local_result -> unit =
+  fun sy res -> sy.result <- res::sy.result
+                
 (** Index of a rule. *)
 type index = int
 
@@ -76,7 +85,7 @@ type signature =
   ; (** An index for the next rule to be added *)
     next_rule : index
   ; (** A map containing every rule studied *)
-    rules     : Rules.rule IMap.t
+    rules     : Rules.pre_rule IMap.t
   }
 
 let new_signature : unit -> signature =
@@ -92,7 +101,7 @@ let find_symb : signature -> index -> symbol =
   (IMap.find i s.symbols)
 
 (** [find_symbol_index s n] will return the index [k] which is mapped to the symbol [n] in the signature [s] *)
-let find_symbol_index : signature -> string -> index =
+let find_symbol_index : signature -> name -> index =
   fun s n ->
     IMap.find_key (s.symbols) (fun x -> x.name = n)
 
@@ -105,11 +114,11 @@ let find_rule_index : signature -> Rules.rule_name -> index =
 let add_symb : signature -> symbol -> signature =
   fun s sy ->
   let next = s.next_symb in
-  Debug.debug D_sign "We add the symbol (%i,%s)" next (sy.name);
+  Debug.debug D_sign "We add the symbol (%i,%a)" next pp_name (sy.name);
   { s with next_symb = next + 1; symbols = IMap.add next sy (s.symbols)}
 
 (** Add a new rule to the call graph *)
-let add_rule : signature -> Rules.rule -> signature =
+let add_rule : signature -> Rules.pre_rule -> signature =
   fun s r ->
   let next = s.next_rule in
   Debug.debug D_sign "We add the rule (%i,%s)" next (r.name);

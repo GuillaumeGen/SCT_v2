@@ -1,3 +1,5 @@
+open Basic
+
 (** Tools used for the matrices labeling edges in the call-graph studied by sizechange.ml *)
 
 module type SemiRing = sig
@@ -12,7 +14,7 @@ module Matrix = functor (SR : SemiRing) -> struct
   type t = {h : int; w : int; tab : SR.t array array}
 
   (** The pretty printer for the type [matrix] *)
-  let pp : t Printer.t = fun fmt m ->
+  let pp : t printer = fun fmt m ->
     Format.fprintf fmt "[[%a]]"
       (Basic.pp_arr "]\n [" (Basic.pp_arr "," SR.pp)) m.tab
       
