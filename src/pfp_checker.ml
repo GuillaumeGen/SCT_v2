@@ -20,7 +20,7 @@ let is_pfp : Rules.pre_rule -> Callgraph.call_graph -> bool =
   let res = ref true in
   term_iter
     (fun i _ ->
-      if not ((is_plain r.args i) || (is_fo (type_rule r gr) gr i))
+      if not ((is_plain r.args i) || (is_fo (snd (type_rule r gr)) gr i))
       then
         (res:= false;
          let sy =

@@ -50,30 +50,41 @@ let rule_info_of_pre_rule : Rules.pre_rule -> Rule.rule_infos =
     in
     let pattern_of_pre_rule : Rules.pre_rule -> Rule.pattern =
       fun r ->
-      Pattern(dloc,r.head,List.map pattern_of_term (Array.to_list r.args)) in
+      Pattern(dloc,r.head,List.map pattern_of_term (Array.to_list r.args))
+    in
     let ur = {
         name = rule_name_conversion r.name
     ; ctx = List.map (fun x -> dloc,x) (Array.to_list r.ctx)
     ; pat = pattern_of_pre_rule r
     ; rhs = r.rhs
     }
-    in to_rule_infos ur)
+    in
+    to_rule_infos ur)
 
-let add_symb_infos : call_graph -> Signature.symbol_infos -> call_graph =
+let add_symb_name : call_graph -> Signature.symbol_infos -> call_graph =
   fun gr sy ->
-  let sym = new_symb sy.ident sy.ty in
-  let res = ref (add_symb gr sym) in
+  add_symb gr (new_symb sy.ident sy.ty)
+
+let add_symb_rules : call_graph -> Signature.symbol_infos -> call_graph =
+  fun gr sy ->
+  let res = ref gr in
   List.iter (fun r -> res := add_rule !res (pre_rule_of_rinfos r)) sy.rules;
   !res
 
 let dk_sig_to_callgraph : Signature.t -> call_graph =
   fun s ->
   let l = Signature.access_signature s in
-  let rec enrich gr =
+  let rec enrich_symb gr =
     function
     | []    -> gr
-    | a::tl -> enrich (add_symb_infos gr a) tl
-  in enrich (new_graph ()) l
+    | a::tl -> enrich_symb (add_symb_name gr a) tl
+  in
+  let rec enrich_rules gr =
+    function
+    | []    -> gr
+    | a::tl -> enrich_rules (add_symb_rules gr a) tl
+  in
+  enrich_rules (enrich_symb (new_graph ()) l) l
 
 let to_dk_signature : string -> entry list -> Signature.t =
   fun path entries ->
@@ -114,9 +125,10 @@ let export_to_dk : call_graph -> Signature.t =
     si.rules;
   res
 
-let type_rule : Rules.pre_rule -> Callgraph.call_graph -> Rules.typed_rule =
+let type_rule : Rules.pre_rule -> Callgraph.call_graph ->
+                Subst.Subst.t * Rules.typed_rule =
   fun r gr ->
   let s = export_to_dk gr in
   let ri = rule_info_of_pre_rule r in
   let tyr = Typing.typed_rule_of_rule_infos s ri in
-  {r with ctx = Array.of_list (List.map (fun (_,a,b) -> a,b) (snd tyr).ctx)}
+  fst tyr, {r with ctx = Array.of_list (List.map (fun (_,a,b) -> a,b) (snd tyr).ctx)}

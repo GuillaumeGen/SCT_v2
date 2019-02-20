@@ -65,9 +65,9 @@ let check_rhs_underf_typab : Callgraph.call_graph -> bool =
   let check_rule : Rules.pre_rule -> bool =
     fun r ->
     let si_loc = partial_export_to_dk r.head in
-    let tyr = type_rule r gr in
+    let sub, tyr = type_rule r gr in
     let symb = IMap.find (find_symbol_index si r.Rules.head) symbols in
-    let expected_typ = remove_pis (Array.to_list r.args) symb.typ in
+    let expected_typ = Subst.Subst.apply sub 0 (remove_pis (Array.to_list r.args) symb.typ) in
     try
       let ctx = List.map (fun (a,b) -> (dloc,a,b)) (Array.to_list tyr.ctx) in
       Typing.check si_loc ctx r.rhs expected_typ;

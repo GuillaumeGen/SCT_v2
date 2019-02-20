@@ -151,7 +151,7 @@ module Bool_matrix = struct
     Matrix(struct
         type t = bool
         let pp          : t Basic.printer =
-          fun fmt b -> Format.printf "%s" (if b then "T" else "F")
+          fun fmt b -> Format.fprintf fmt "%s" (if b then "T" else "F")
         let add_neutral : t = false
         let plus        : t -> t -> t = (||)
         let mult        : t -> t -> t = (&&)

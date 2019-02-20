@@ -1,6 +1,6 @@
 type pre_context   = Basic.ident array
 type typed_context = (Basic.ident * Term.term) array
-                 
+
 type rule_name = string
 
 type 'a rule =
@@ -24,5 +24,5 @@ let arity_of : Term.term -> int =
     fun i ->
     function
     | Term.Pi(_, _, a, b) -> aux (i+1) b
-    | _                   -> 0
+    | _                   -> i
   in aux 0

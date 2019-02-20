@@ -6,12 +6,12 @@ open Callgraph
 
 let rec dig_in_rhs : term -> (int * Basic.name * term array) list =
   function
-  | Kind 
+  | Kind
     | Type(_) -> assert false
   | DB(_,_,_) -> []
-  | Const(_,f) -> [0, f, [||]] 
+  | Const(_,f) -> [0, f, [||]]
   | App(Const(_,f),u,l) ->
-     (0, f, Array.of_list l)
+     (0, f, Array.of_list (u::l))
      :: List.concat (List.map dig_in_rhs (u::l))
   | App(t,u,l) ->
      List.concat (List.map dig_in_rhs (t::u::l))
@@ -53,15 +53,15 @@ let rec compare_term : int -> term -> term -> Cmp.t =
                  List.map (fun t_ll -> compare_term i t_ll t_r) (up::lp)
                )
            ) in
-       Cmp.plus res1 res2 
+       Cmp.plus res1 res2
      end
   | App (_,u,l),_ ->
      Cmp.minus1
        (Cmp.mini (List.map (fun t_ll -> compare_term i t_ll t_r) (u::l)))
   | Lam(_,_,_,t_ll),Lam(_,_,_,t_rr) -> compare_term i t_ll t_rr
   | _ -> Infi
-  
-         
+
+
 let study_call : signature -> index -> term array ->
                  int -> index -> term array -> Cmp_matrix.t =
   fun si fun_l arg_l nb fun_r arg_r ->
@@ -77,7 +77,7 @@ let study_call : signature -> index -> term array ->
     done
   done;
   matrix
-         
+
 (** Add the calls associated to a rule in the call graph *)
 let add_rule : call_graph -> pre_rule -> call_graph =
   fun gr r ->
