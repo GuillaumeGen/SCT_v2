@@ -32,7 +32,7 @@ let pp_couple sep pp1 pp2 fmt x =
 let format_of_sep str fmt () : unit = Format.fprintf fmt "%s" str
 
 let pp_list sep pp fmt l = Format.pp_print_list ~pp_sep:(format_of_sep sep) pp fmt l
-    
+
 let pp_sstring sep pp fmt s = pp_list sep pp fmt (SString.elements s)
 
 let rec pp_xml fmt = function
@@ -50,7 +50,7 @@ let rec get_vars = function
     SString.singleton(normalise x)
   | Xml.Element(s,l,ll) when s="var" -> failwith "So many argument in var !"
   | Xml.Element(s,l,(Xml.Element(v,[],(Xml.PCData y)::[])::b::ll))
-    when s="lambda" && v="var"-> 
+    when s="lambda" && v="var"->
     SString.remove (normalise y)
       (List.fold_left SString.union SString.empty  (List.map get_vars ll))
   | Xml.Element(s,l,ll) ->
@@ -119,7 +119,7 @@ let rec eta_expand k t=
     let v="new_var_"^(string_of_int k) in
     eta_expand (k-1) ("("^v^" => "^t^" "^v^")")
 
-let get_term = 
+let get_term =
   let rec get_term_aux under_app rhs = function
     | Xml.Element(s,l,ll) when s="funapp" ->
       begin
@@ -182,7 +182,7 @@ let rec get_rules = function
     failwith "So many arguments in rule !"
   | Xml.Element(s,l,ll) -> List.flatten (List.map get_rules ll)
   | Xml.PCData(_) -> []
-  
+
 let print_rules fmt triple =
   let a,b,c = triple in
   Format.fprintf fmt "[%a] %s --> %s.@."
@@ -195,7 +195,7 @@ let print_func fmt couple =
   let a,b = couple in
   Format.fprintf fmt "def %s : %a.@." a
     (pp_list " -> " Format.pp_print_string) b
-  
+
 let print_dk y =
   let name = String.sub y 0 (String.length y -4)^".dk" in
   let output = Format.formatter_of_out_channel (open_out name) in
@@ -232,17 +232,25 @@ let add_rul : mident -> (SString.t * string * string) -> string =
       var;
     !res^"] "^t1^" --> "^t2^".\n"
 
-let load : mident -> string -> string =
+let run : mident -> Xml.xml -> string =
+  fun md x ->
+  let typ = get_types x in
+  let list_typ =
+    if SString.cardinal typ = 0
+    then add_type "Default_Type"
+    else List.fold_left (fun s x -> s^(add_type x)) "" (SString.elements typ)
+  in
+  let funcs = get_funcs x in
+  let list_func = List.fold_left (fun s x -> s^(add_func md x)) "" funcs in
+  let rules = get_rules x in
+  let list_rul = List.fold_left (fun s x -> s^(add_rul md x)) "" rules in
+  list_typ ^ list_func ^ list_rul
+
+
+let load_file : mident -> string -> string =
   fun md file ->
-    let x=Xml.parse_file file in
-    let typ = get_types x in
-    let list_typ =
-      if SString.cardinal typ = 0
-      then add_type "Default_Type"
-      else List.fold_left (fun s x -> s^(add_type x)) "" (SString.elements typ)
-    in
-    let funcs = get_funcs x in
-    let list_func = List.fold_left (fun s x -> s^(add_func md x)) "" funcs in
-    let rules = get_rules x in
-    let list_rul = List.fold_left (fun s x -> s^(add_rul md x)) "" rules in
-    list_typ ^ list_func ^ list_rul
+  run md (Xml.parse_file file)
+
+let load_std : mident -> string =
+  fun md ->
+  run md (Xml.parse_in stdin)

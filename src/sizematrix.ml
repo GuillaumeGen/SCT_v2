@@ -1,5 +1,8 @@
 open Basic
 
+type Debug.flag += D_matrix
+let _ = Debug.register_flag D_matrix "Call matrix"
+
 (** Tools used for the matrices labeling edges in the call-graph studied by sizechange.ml *)
 
 module type SemiRing = sig
